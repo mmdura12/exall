@@ -1,12 +1,13 @@
-import pandas as pd
+import pandas as pdimport
 import numpy as np
+from decimal import Decimal, getcontext
 from datetime import datetime
 import os
 from pathlib import Path
 import warnings
 
 warnings.filterwarnings('ignore')
-
+getcontext().prec = 28
 
 class FinancialAnalyzer:
     def __init__(self, input_folder_path):
@@ -16,107 +17,60 @@ class FinancialAnalyzer:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-    def get_value_by_row(self, df, var_name):
-        """Enhanced value extraction with maximum precision"""
+        # Updated variables mapping to use text search instead of fixed row numbers
+        self.variables_mapping = {
+            "موجودی نقد": "موجودی نقد",
+            "دارایی‌های جاری": "دارایی‌های جاری",
+            "موجودی مواد و کالا": "موجودی مواد و کالا",
+            "بدهی‌های جاری": "بدهی‌های جاری",
+            "سود خالص": "سود خالص",
+            "جمع دارایی‌ها": "جمع دارایی‌ها",
+            "جمع حقوق مالکانه": "جمع حقوق صاحبان سهام",
+            "فروش": "درآمدهای عملیاتی",
+            "سود عملیاتی": "سود عملیاتی",
+            "سود ناخالص": "سود ناخالص",
+            "دریافتنی‌های تجاری و سایر دریافتنی‌ها": "دریافتنی‌های تجاری",
+            "بهای تمام شده کالای فروش رفته": "بهای تمام‌شده درآمدهای عملیاتی",
+            "جمع بدهی‌ها": "جمع بدهی‌ها"
+        }
+
+    def get_value_by_row(self, df, search_term):
+        """Enhanced value extraction with text search"""
         try:
-            # Store all potential matches
-            matches = []
+            # Convert all values in first column to string for comparison
+            df.iloc[:, 0] = df.iloc[:, 0].astype(str)
 
-            # First pass: Look for exact matches
-            for idx, row in df.iterrows():
-                if pd.notna(row[0]) and str(row[0]).strip() == var_name:
-                    for col in range(1, len(df.columns)):
-                        value = df.iloc[idx, col]
-                        if pd.notna(value):
-                            try:
-                                # Handle different numeric formats
-                                if isinstance(value, (int, float)):
-                                    matches.append(float(value))
-                                elif isinstance(value, str):
-                                    # Remove grouping separators and handle different decimal symbols
-                                    cleaned = value.replace(',', '').replace('٫', '.').strip()
-                                    if cleaned and cleaned != '-':
-                                        matches.append(float(cleaned))
-                            except ValueError:
-                                continue
+            # Look for exact or partial matches
+            matches = df[df.iloc[:, 0].str.contains(search_term, na=False, regex=False)]
 
-            # Second pass: Look for partial matches if no exact match found
-            if not matches:
-                for idx, row in df.iterrows():
-                    if pd.notna(row[0]) and var_name in str(row[0]):
-                        for col in range(1, len(df.columns)):
-                            value = df.iloc[idx, col]
-                            if pd.notna(value):
-                                try:
-                                    if isinstance(value, (int, float)):
-                                        matches.append(float(value))
-                                    elif isinstance(value, str):
-                                        cleaned = value.replace(',', '').replace('٫', '.').strip()
-                                        if cleaned and cleaned != '-':
-                                            matches.append(float(cleaned))
-                                except ValueError:
-                                    continue
+            if not matches.empty:
+                # Get the first matching row
+                row = matches.iloc[0]
 
-            # If we found matches, return the most appropriate one
-            if matches:
-                # Filter out obvious outliers
-                filtered_matches = [m for m in matches if m != 0]
-                if filtered_matches:
-                    # Return the largest absolute value (assuming it's the most significant)
-                    value = max(filtered_matches, key=abs)
-                    print(f"Found value for {var_name}: {value:,.2f}")
-                    return value
+                # Look for the first non-null value in columns after the first column
+                for value in row[1:]:
+                    if pd.notna(value):
+                        try:
+                            # Convert Persian numbers if present
+                            if isinstance(value, str):
+                                value = value.strip().replace(',', '').replace('٫', '.')
+                                for persian, english in zip('۰۱۲۳۴۵۶۷۸۹', '0123456789'):
+                                    value = value.replace(persian, english)
 
-            print(f"No valid value found for {var_name}")
-            return 0.0
+                            # Convert to Decimal for precise calculation
+                            decimal_value = Decimal(str(value))
+                            print(f"Found value for {search_term}: {float(decimal_value):,.2f}")
+                            return decimal_value
+
+                        except (ValueError, TypeError):
+                            continue
+
+            print(f"No valid value found for {search_term}")
+            return Decimal('0')
 
         except Exception as e:
-            print(f"Error processing {var_name}: {str(e)}")
-            return 0.0
-
-    def safe_divide(numerator, denominator):
-        """Enhanced division with maximum precision"""
-        try:
-            if denominator is None or numerator is None:
-                return 0.0
-            if abs(denominator) < np.finfo(np.float64).eps:
-                return 0.0
-
-            # Convert to high precision floating point
-            num = np.float64(numerator)
-            den = np.float64(denominator)
-
-            result = num / den
-
-            # Check for invalid results
-            if np.isinf(result) or np.isnan(result):
-                return 0.0
-
-            return result
-
-        except Exception as e:
-            print(f"Division error: {str(e)}")
-            return 0.0
-
-    # In the process_files method, update the variables calculation:
-    variables = {}
-    for var_key, var_name in variable_mappings.items():
-        raw_value = self.get_value_by_row(all_data, var_name)
-        # Use high precision conversion
-        variables[var_key] = np.float64(raw_value) / np.float64(1_000_000.0)
-        print(f"{var_key}: {variables[var_key]:,.6f}")
-
-    # And in create_consolidated_report, update the DataFrame creation:
-    variables_df = pd.DataFrame(all_years_data['variables']).round(6)  # Increased precision
-    ratios_df = pd.DataFrame(all_years_data['ratios']).round(6)  # Increased precision
-
-    # Update the number format in the Excel output:
-    number_format = workbook.add_format({
-        'num_format': '#,##0.000000',  # Increased decimal places
-        'border': 1,
-        'align': 'right',
-        'font_name': 'B Nazanin'
-    })
+            print(f"Error processing {search_term}: {str(e)}")
+            return Decimal('0')
 
     def process_files(self):
         try:
@@ -126,90 +80,59 @@ class FinancialAnalyzer:
             }
 
             excel_files = sorted([f for f in self.input_folder.glob('*.xlsx')
-                                  if not f.name.startswith('~$')])
-
-            # Correct row numbers based on your Excel structure
-            variables_mapping = {
-                "موجودی نقد": 92,
-                "دارایی‌های جاری": 87,
-                "موجودی مواد و کالا": 89,
-                "بدهی‌های جاری": 116,
-                "سود خالص": 59,
-                "جمع دارایی‌ها": 96,
-                "جمع حقوق مالکانه": 109,
-                "فروش": 101,
-                "سود عملیاتی": 20,
-                "سود ناخالص": 15,
-                "دریافتنی‌های تجاری و سایر دریافتنی‌ها": 98,
-                "بهای تمام شده کالای فروش رفته": 14,
-                "جمع بدهی‌ها": 135,
-                "سرمایه‌گذاری‌های کوتاه‌مدت": 99
-            }
+                                if not f.name.startswith('~$')])
 
             for file_path in excel_files:
                 try:
                     year = file_path.stem
                     print(f"\nProcessing year {year}...")
 
+                    # Read Excel file with all sheets
                     df = pd.read_excel(
                         file_path,
                         engine='openpyxl',
                         header=None,
-                        dtype=object
+                        dtype=str  # Read all values as strings initially
                     )
 
                     # Calculate variables
                     variables = {}
-                    for var_name, row_num in variables_mapping.items():
-                        value = self.get_value_by_row(df, row_num)
-                        variables[var_name] = value / 1_000_000.0  # Convert to millions
-                        print(f"{var_name}: {value:,.2f} -> {variables[var_name]:,.6f}")
+                    for var_key, search_term in self.variables_mapping.items():
+                        raw_value = self.get_value_by_row(df, search_term)
+                        variables[var_key] = raw_value / Decimal('1000000.0')  # Convert to millions
+                        print(f"{var_key}: {float(variables[var_key]):,.10f}")
 
-                    def safe_divide(numerator, denominator):
-                        """Precise division with error checking"""
-                        try:
-                            if denominator is None or numerator is None:
-                                return 0.0
-                            if abs(denominator) < 1e-10:
-                                return 0.0
-                            result = float(numerator) / float(denominator)
-                            if np.isinf(result) or np.isnan(result):
-                                return 0.0
-                            return result
-                        except:
-                            return 0.0
-
-                    # Calculate ratios
+                    # Calculate ratios with proper error handling
                     ratios = {
-                        "نسبت جاری": safe_divide(variables["دارایی‌های جاری"], variables["بدهی‌های جاری"]),
-                        "نسبت آنی": safe_divide(
+                        "نسبت جاری": self.safe_divide(variables["دارایی‌های جاری"], variables["بدهی‌های جاری"]),
+                        "نسبت آنی": self.safe_divide(
                             variables["دارایی‌های جاری"] - variables["موجودی مواد و کالا"],
                             variables["بدهی‌های جاری"]
                         ),
-                        "نسبت نقدی": safe_divide(variables["موجودی نقد"], variables["بدهی‌های جاری"]),
-                        "بازده دارایی‌ها": safe_divide(variables["سود خالص"], variables["جمع دارایی‌ها"]),
-                        "بازده حقوق صاحبان سهام": safe_divide(variables["سود خالص"], variables["جمع حقوق مالکانه"]),
-                        "حاشیه سود خالص": safe_divide(variables["سود خالص"], variables["فروش"]),
-                        "حاشیه سود عملیاتی": safe_divide(variables["سود عملیاتی"], variables["فروش"]),
-                        "حاشیه سود ناخالص": safe_divide(variables["سود ناخالص"], variables["فروش"]),
-                        "دوره وصول مطالبات": safe_divide(
-                            variables["دریافتنی‌های تجاری و سایر دریافتنی‌ها"] * 365,
+                        "نسبت نقدی": self.safe_divide(variables["موجودی نقد"], variables["بدهی‌های جاری"]),
+                        "بازده دارایی‌ها": self.safe_divide(variables["سود خالص"], variables["جمع دارایی‌ها"]),
+                        "بازده حقوق صاحبان سهام": self.safe_divide(variables["سود خالص"], variables["جمع حقوق مالکانه"]),
+                        "حاشیه سود خالص": self.safe_divide(variables["سود خالص"], variables["فروش"]),
+                        "حاشیه سود عملیاتی": self.safe_divide(variables["سود عملیاتی"], variables["فروش"]),
+                        "حاشیه سود ناخالص": self.safe_divide(variables["سود ناخالص"], variables["فروش"]),
+                        "دوره وصول مطالبات": self.safe_divide(
+                            variables["دریافتنی‌های تجاری و سایر دریافتنی‌ها"] * Decimal('365'),
                             variables["فروش"]
                         ),
-                        "گردش مطالبات": safe_divide(
+                        "گردش مطالبات": self.safe_divide(
                             variables["فروش"],
                             variables["دریافتنی‌های تجاری و سایر دریافتنی‌ها"]
                         ),
-                        "گردش موجودی کالا": safe_divide(
+                        "گردش موجودی کالا": self.safe_divide(
                             variables["بهای تمام شده کالای فروش رفته"],
                             variables["موجودی مواد و کالا"]
                         ),
-                        "نسبت بدهی به دارایی": safe_divide(variables["جمع بدهی‌ها"], variables["جمع دارایی‌ها"])
+                        "نسبت بدهی به دارایی": self.safe_divide(variables["جمع بدهی‌ها"], variables["جمع دارایی‌ها"])
                     }
 
                     # Store data
-                    all_years_data['variables'][year] = variables
-                    all_years_data['ratios'][year] = ratios
+                    all_years_data['variables'][year] = {k: float(v) for k, v in variables.items()}
+                    all_years_data['ratios'][year] = {k: float(v) for k, v in ratios.items()}
 
                 except Exception as e:
                     print(f"Error processing file {file_path}: {str(e)}")
@@ -224,6 +147,34 @@ class FinancialAnalyzer:
             import traceback
             print(traceback.format_exc())
             return None
+
+    def safe_divide(self, numerator, denominator):
+        """Precise division with error checking"""
+        try:
+            if denominator is None or numerator is None:
+                return Decimal('0')
+
+            # Ensure we're working with Decimal objects
+            if not isinstance(numerator, Decimal):
+                numerator = Decimal(str(numerator))
+            if not isinstance(denominator, Decimal):
+                denominator = Decimal(str(denominator))
+
+            if abs(denominator) < Decimal('1E-10'):
+                return Decimal('0')
+
+            result = numerator / denominator
+
+            if not result.is_finite():
+                return Decimal('0')
+
+            return result
+
+        except Exception as e:
+            print(f"Division error: {str(e)}")
+            return Decimal('0')
+
+    
 
     def create_consolidated_report(self, all_years_data):
         try:
@@ -240,19 +191,19 @@ class FinancialAnalyzer:
                     'border': 1,
                     'align': 'right',
                     'font_name': 'B Nazanin',
-                    'num_format': '#,##0.00'
+                    'num_format': '#,##0.0000000000'
                 })
 
                 number_format = workbook.add_format({
-                    'num_format': '#,##0.00',
+                    'num_format': '#,##0.0000000000',  # 10 decimal places
                     'border': 1,
                     'align': 'right',
                     'font_name': 'B Nazanin'
                 })
 
-                # Create DataFrames
-                variables_df = pd.DataFrame(all_years_data['variables']).round(6)
-                ratios_df = pd.DataFrame(all_years_data['ratios']).round(6)
+                # Create DataFrames with high precision
+                variables_df = pd.DataFrame(all_years_data['variables']).round(10)
+                ratios_df = pd.DataFrame(all_years_data['ratios']).round(10)
 
                 # Write sheets
                 variables_df.to_excel(writer, sheet_name='متغیرهای پایه', index=True)
