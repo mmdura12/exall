@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, ROUND_HALF_UP, DivisionByZero, InvalidOperation
 from datetime import datetime
 import os
 from pathlib import Path
@@ -87,30 +87,66 @@ class FinancialAnalyzer:
             print(f"Error processing {search_terms[0]}: {str(e)}")
             return Decimal('0')
 
+    from decimal import Decimal, getcontext, ROUND_HALF_UP, DivisionByZero, InvalidOperation
+
     def safe_divide(self, numerator, denominator):
-        """Precise division with comprehensive error checking"""
+        """
+        Performs precise division for financial calculations with comprehensive error handling.
+        Returns Decimal with maximum precision and proper handling of edge cases.
+        """
         try:
-            if numerator is None or denominator is None:
+            # Handle None and NaN inputs
+            if numerator is None or denominator is None or pd.isna(numerator) or pd.isna(denominator):
                 return Decimal('0')
 
-            # Ensure we're working with Decimal objects
-            if not isinstance(numerator, Decimal):
-                numerator = Decimal(str(numerator))
-            if not isinstance(denominator, Decimal):
-                denominator = Decimal(str(denominator))
+            # Convert to Decimal with maximum precision
+            try:
+                if isinstance(numerator, (float, int)):
+                    numerator = Decimal(str(numerator))
+                elif isinstance(numerator, str):
+                    numerator = Decimal(numerator.replace(',', '').strip())
+                elif not isinstance(numerator, Decimal):
+                    numerator = Decimal(str(numerator))
 
-            if abs(denominator) < Decimal('1E-10'):
+                if isinstance(denominator, (float, int)):
+                    denominator = Decimal(str(denominator))
+                elif isinstance(denominator, str):
+                    denominator = Decimal(denominator.replace(',', '').strip())
+                elif not isinstance(denominator, Decimal):
+                    denominator = Decimal(str(denominator))
+            except (ValueError, InvalidOperation) as e:
+                print(f"Value conversion error: {str(e)}")
                 return Decimal('0')
 
-            result = numerator / denominator
+            # Check for zero or near-zero denominator
+            if abs(denominator) < Decimal('1E-28'):
+                print("Division by zero or near-zero value detected")
+                return Decimal('0')
 
+            # Perform division with maximum precision
+            try:
+                result = numerator / denominator
+            except DivisionByZero:
+                print("Division by zero error")
+                return Decimal('0')
+            except InvalidOperation as e:
+                print(f"Invalid operation in division: {str(e)}")
+                return Decimal('0')
+
+            # Validate result
             if not result.is_finite():
+                print("Non-finite result detected")
                 return Decimal('0')
 
-            return result
+            # Round to 10 decimal places for financial ratios
+            try:
+                return result.quantize(Decimal('0.0000000000'), rounding=ROUND_HALF_UP)
+            except InvalidOperation as e:
+                print(f"Error during rounding: {str(e)}")
+                return Decimal('0')
 
         except Exception as e:
-            print(f"Division error: {str(e)}")
+            print(f"Unexpected error in division: {str(e)}")
             return Decimal('0')
 
     def process_files(self):
@@ -128,54 +164,77 @@ class FinancialAnalyzer:
                     year = file_path.stem
                     print(f"\nProcessing year {year}...")
 
-                    # Read Excel file without encoding parameter
                     df = pd.read_excel(
                         file_path,
                         engine='openpyxl',
                         header=None,
-                        dtype=str  # Read all values as strings initially
+                        dtype=str
                     )
 
+                    # Initialize variables dictionary with zeros
+                    variables = {key: Decimal('0') for key in self.variables_mapping.keys()}
+
                     # Calculate variables
-                    variables = {}
                     for var_key, search_terms in self.variables_mapping.items():
                         raw_value = self.get_value_by_row(df, search_terms)
-                        if raw_value == Decimal('0'):
+                        if raw_value != Decimal('0'):
+                            variables[var_key] = raw_value / Decimal('1000000.0')  # Convert to millions
+                            print(f"{var_key}: {float(variables[var_key]):,.10f}")
+                        else:
                             print(f"Warning: Zero value found for {var_key} in {year}")
-                            continue
-                        variables[var_key] = raw_value / Decimal('1000000.0')  # Convert to millions
-                        print(f"{var_key}: {float(variables[var_key]):,.10f}")
 
-                    # Calculate ratios with proper error handling
+                    # Calculate ratios only if we have all required values
                     try:
-                        ratios = {
-                            "نسبت جاری": self.safe_divide(variables["دارایی‌های جاری"], variables["بدهی‌های جاری"]),
-                            "نسبت آنی": self.safe_divide(
+                        ratios = {}
+
+                        if variables["دارایی‌های جاری"] != 0 and variables["بدهی‌های جاری"] != 0:
+                            ratios["نسبت جاری"] = self.safe_divide(variables["دارایی‌های جاری"],
+                                                                   variables["بدهی‌های جاری"])
+
+                            ratios["نسبت آنی"] = self.safe_divide(
                                 variables["دارایی‌های جاری"] - variables["موجودی مواد و کالا"],
                                 variables["بدهی‌های جاری"]
-                            ),
-                            "نسبت نقدی": self.safe_divide(variables["موجودی نقد"], variables["بدهی‌های جاری"]),
-                            "بازده دارایی‌ها": self.safe_divide(variables["سود خالص"], variables["جمع دارایی‌ها"]),
-                            "بازده حقوق صاحبان سهام": self.safe_divide(variables["سود خالص"],
-                                                                       variables["جمع حقوق مالکانه"]),
-                            "حاشیه سود خالص": self.safe_divide(variables["سود خالص"], variables["فروش"]),
-                            "حاشیه سود عملیاتی": self.safe_divide(variables["سود عملیاتی"], variables["فروش"]),
-                            "حاشیه سود ناخالص": self.safe_divide(variables["سود ناخالص"], variables["فروش"]),
-                            "دوره وصول مطالبات": self.safe_divide(
+                            )
+
+                            ratios["نسبت نقدی"] = self.safe_divide(variables["موجودی نقد"],
+                                                                   variables["بدهی‌های جاری"])
+
+                        if variables["سود خالص"] != 0:
+                            ratios["بازده دارایی‌ها"] = self.safe_divide(variables["سود خالص"],
+                                                                         variables["جمع دارایی‌ها"])
+                            ratios["بازده حقوق صاحبان سهام"] = self.safe_divide(variables["سود خالص"],
+                                                                                variables["جمع حقوق مالکانه"])
+                            ratios["حاشیه سود خالص"] = self.safe_divide(variables["سود خالص"],
+                                                                        variables["فروش"])
+
+                        if variables["سود عملیاتی"] != 0:
+                            ratios["حاشیه سود عملیاتی"] = self.safe_divide(variables["سود عملیاتی"],
+                                                                           variables["فروش"])
+
+                        if variables["سود ناخالص"] != 0:
+                            ratios["حاشیه سود ناخالص"] = self.safe_divide(variables["سود ناخالص"],
+                                                                          variables["فروش"])
+
+                        if variables["فروش"] != 0:
+                            ratios["دوره وصول مطالبات"] = self.safe_divide(
                                 variables["دریافتنی‌های تجاری و سایر دریافتنی‌ها"] * Decimal('365'),
                                 variables["فروش"]
-                            ),
-                            "گردش مطالبات": self.safe_divide(
+                            )
+
+                            ratios["گردش مطالبات"] = self.safe_divide(
                                 variables["فروش"],
                                 variables["دریافتنی‌های تجاری و سایر دریافتنی‌ها"]
-                            ),
-                            "گردش موجودی کالا": self.safe_divide(
+                            )
+
+                        if variables["موجودی مواد و کالا"] != 0:
+                            ratios["گردش موجودی کالا"] = self.safe_divide(
                                 variables["بهای تمام شده کالای فروش رفته"],
                                 variables["موجودی مواد و کالا"]
-                            ),
-                            "نسبت بدهی به دارایی": self.safe_divide(variables["جمع بدهی‌ها"],
-                                                                    variables["جمع دارایی‌ها"])
-                        }
+                            )
+
+                        if variables["جمع دارایی‌ها"] != 0:
+                            ratios["نسبت بدهی به دارایی"] = self.safe_divide(variables["جمع بدهی‌ها"],
+                                                                             variables["جمع دارایی‌ها"])
 
                         # Store data with high precision
                         all_years_data['variables'][year] = {k: float(v) for k, v in variables.items()}
