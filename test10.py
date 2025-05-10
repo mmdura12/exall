@@ -1,3 +1,4 @@
+
 import pandas as pd
 import numpy as np
 from decimal import Decimal, getcontext, ROUND_HALF_UP, DivisionByZero, InvalidOperation
@@ -20,65 +21,123 @@ class FinancialAnalyzer:
 
         # Updated variables mapping with alternative text variations
         self.variables_mapping = {
-            "موجودی نقد": ["موجودی نقد", "وجه نقد"],
-            "دارایی‌های جاری": ["دارایی‌های جاری", "دارایی\u200cهای جاری", "جمع دارایی‌های جاری"],
-            "موجودی مواد و کالا": ["موجودی مواد و کالا", "موجودی کالا"],
-            "بدهی‌های جاری": ["بدهی‌های جاری", "بدهی\u200cهای جاری", "جمع بدهی‌های جاری"],
-            "سود خالص": ["سود خالص", "سود (زیان) خالص"],
-            "جمع دارایی‌ها": ["جمع دارایی‌ها", "جمع کل دارایی\u200cها"],
-            "جمع حقوق مالکانه": ["جمع حقوق مالکانه", "جمع حقوق صاحبان سهام"],
-            "فروش": ["درآمدهای عملیاتی", "فروش خالص", "درآمد عملیاتی"],
-            "سود عملیاتی": ["سود عملیاتی", "سود (زیان) عملیاتی"],
-            "سود ناخالص": ["سود ناخالص", "سود (زیان) ناخالص"],
-            "دریافتنی‌های تجاری و سایر دریافتنی‌ها": ["دریافتنی‌های تجاری", "حساب‌های دریافتنی تجاری"],
-            "بهای تمام شده کالای فروش رفته": ["بهای تمام‌شده درآمدهای عملیاتی", "بهای تمام شده کالای فروش رفته"],
-            "جمع بدهی‌ها": ["جمع بدهی‌ها", "جمع کل بدهی\u200cها"]
+            "موجودی نقد": ["موجودی نقد", "وجه نقد", "موجودی نقد و معادل نقد", "نقد و معادل نقد"],
+            "دارایی‌های جاری": [
+                "دارایی‌های جاری",
+                "دارایی های جاری",
+                "جمع دارایی‌های جاری",
+                "جمع دارایی های جاری",
+                "جمع دارایی جاری"
+            ],
+            "موجودی مواد و کالا": [
+                "موجودی مواد و کالا",
+                "موجودی کالا",
+                "موجودی‌ها",
+                "موجودی مواد، کالا و قطعات"
+            ],
+            "بدهی‌های جاری": [
+                "بدهی‌های جاری",
+                "بدهی های جاری",
+                "جمع بدهی‌های جاری",
+                "جمع بدهی های جاری",
+                "جمع بدهی جاری"
+            ],
+            "سود خالص": [
+                "سود خالص",
+                "سود (زیان) خالص",
+                "سود و زیان خالص",
+                "سود (زیان) خالص دوره"
+            ],
+            "جمع دارایی‌ها": [
+                "جمع دارایی‌ها",
+                "جمع کل دارایی‌ها",
+                "جمع دارایی ها",
+                "جمع کل دارایی ها"
+            ],
+            "جمع حقوق مالکانه": [
+                "جمع حقوق مالکانه",
+                "جمع حقوق صاحبان سهام",
+                "حقوق صاحبان سهام"
+            ],
+            "فروش": [
+                "درآمدهای عملیاتی",
+                "فروش خالص",
+                "درآمد عملیاتی",
+                "جمع درآمدهای عملیاتی",
+                "فروش"
+            ],
+            "سود عملیاتی": [
+                "سود عملیاتی",
+                "سود (زیان) عملیاتی",
+                "سود و زیان عملیاتی"
+            ],
+            "سود ناخالص": [
+                "سود ناخالص",
+                "سود (زیان) ناخالص",
+                "سود و زیان ناخالص"
+            ],
+            "دریافتنی‌های تجاری و سایر دریافتنی‌ها": [
+                "دریافتنی‌های تجاری",
+                "حساب‌های دریافتنی تجاری",
+                "دریافتنی های تجاری",
+                "حساب های دریافتنی"
+            ],
+            "بهای تمام شده کالای فروش رفته": [
+                "بهای تمام‌شده درآمدهای عملیاتی",
+                "بهای تمام شده کالای فروش رفته",
+                "بهای تمام شده درآمدهای عملیاتی",
+                "بهای تمام شده فروش"
+            ],
+            "جمع بدهی‌ها": [
+                "جمع بدهی‌ها",
+                "جمع کل بدهی‌ها",
+                "جمع بدهی ها",
+                "جمع کل بدهی ها"
+            ]
         }
 
     def get_value_by_row(self, df, search_terms):
-        """Enhanced value extraction with multiple search terms and special character handling"""
+        """Enhanced value extraction with better pattern matching"""
         try:
             if isinstance(search_terms, str):
                 search_terms = [search_terms]
 
-            # Convert DataFrame to string type for better text matching
+            # Convert DataFrame to string type and clean it
             df = df.astype(str)
 
             for search_term in search_terms:
-                # Handle special characters in Persian text
-                normalized_search = search_term.replace('‌', ' ').replace('\u200c', ' ')
+                # Clean search term
+                clean_search = search_term.replace('‌', '').replace('\u200c', '')
 
-                # Try exact match first
-                for col in range(df.shape[1]):
-                    matches = df[
-                        df.iloc[:, col].str.replace('‌', ' ').str.replace('\u200c', ' ').str.contains(normalized_search,
-                                                                                                      regex=False,
-                                                                                                      na=False)]
-                    if not matches.empty:
-                        row_idx = matches.index[0]
-                        # Look for numeric values in the same row
-                        for value_col in range(df.shape[1]):
-                            if value_col != col:  # Don't check the column with the label
-                                value = df.iloc[row_idx, value_col]
-                                if pd.notna(value) and str(value).strip() not in ['', '-']:
-                                    try:
-                                        # Clean the value
-                                        cleaned_value = str(value).strip()
-                                        cleaned_value = cleaned_value.replace(',', '').replace('٫', '.')
-                                        cleaned_value = cleaned_value.replace('−', '-').replace('(', '-').replace(')',
-                                                                                                                  '')
+                # First try exact match in the last column
+                last_col = df.shape[1] - 1
+                for idx, row in df.iterrows():
+                    cell_value = str(row.iloc[last_col]).replace('‌', '').replace('\u200c', '')
+                    if clean_search in cell_value:
+                        # Look for the value in the first column
+                        value = row.iloc[0]
+                        if pd.notna(value) and str(value).strip() not in ['', '-', '0']:
+                            try:
+                                # Clean and convert the value
+                                cleaned_value = str(value).strip()
+                                cleaned_value = cleaned_value.replace(',', '')
+                                cleaned_value = cleaned_value.replace('٫', '.')
+                                cleaned_value = cleaned_value.replace('−', '-')
+                                cleaned_value = cleaned_value.replace('(', '-')
+                                cleaned_value = cleaned_value.replace(')', '')
 
-                                        # Convert Persian numbers
-                                        for persian, english in zip('۰۱۲۳۴۵۶۷۸۹', '0123456789'):
-                                            cleaned_value = cleaned_value.replace(persian, english)
+                                # Convert Persian numbers
+                                persian_numbers = '۰۱۲۳۴۵۶۷۸۹'
+                                english_numbers = '0123456789'
+                                for persian, english in zip(persian_numbers, english_numbers):
+                                    cleaned_value = cleaned_value.replace(persian, english)
 
-                                        # Convert to Decimal
-                                        decimal_value = Decimal(cleaned_value)
-                                        if decimal_value != 0:
-                                            print(f"Found value for {search_term}: {float(decimal_value):,.2f}")
-                                            return decimal_value
-                                    except (ValueError, TypeError):
-                                        continue
+                                decimal_value = Decimal(cleaned_value)
+                                if decimal_value != 0:
+                                    print(f"Found value for {search_term}: {float(decimal_value):,.2f}")
+                                    return decimal_value
+                            except (ValueError, TypeError):
+                                continue
 
             print(f"No valid value found for {search_terms[0]}")
             return Decimal('0')
@@ -87,67 +146,34 @@ class FinancialAnalyzer:
             print(f"Error processing {search_terms[0]}: {str(e)}")
             return Decimal('0')
 
-    from decimal import Decimal, getcontext, ROUND_HALF_UP, DivisionByZero, InvalidOperation
-
     def safe_divide(self, numerator, denominator):
-        """
-        Performs precise division for financial calculations with comprehensive error handling.
-        Returns Decimal with maximum precision and proper handling of edge cases.
-        """
+        """Precise division for financial calculations"""
         try:
-            # Handle None and NaN inputs
             if numerator is None or denominator is None or pd.isna(numerator) or pd.isna(denominator):
                 return Decimal('0')
 
-            # Convert to Decimal with maximum precision
-            try:
-                if isinstance(numerator, (float, int)):
-                    numerator = Decimal(str(numerator))
-                elif isinstance(numerator, str):
-                    numerator = Decimal(numerator.replace(',', '').strip())
-                elif not isinstance(numerator, Decimal):
-                    numerator = Decimal(str(numerator))
+            # Convert to Decimal
+            if not isinstance(numerator, Decimal):
+                numerator = Decimal(str(numerator))
+            if not isinstance(denominator, Decimal):
+                denominator = Decimal(str(denominator))
 
-                if isinstance(denominator, (float, int)):
-                    denominator = Decimal(str(denominator))
-                elif isinstance(denominator, str):
-                    denominator = Decimal(denominator.replace(',', '').strip())
-                elif not isinstance(denominator, Decimal):
-                    denominator = Decimal(str(denominator))
-            except (ValueError, InvalidOperation) as e:
-                print(f"Value conversion error: {str(e)}")
-                return Decimal('0')
-
-            # Check for zero or near-zero denominator
+            # Check for zero denominator
             if abs(denominator) < Decimal('1E-28'):
-                print("Division by zero or near-zero value detected")
                 return Decimal('0')
 
-            # Perform division with maximum precision
-            try:
-                result = numerator / denominator
-            except DivisionByZero:
-                print("Division by zero error")
-                return Decimal('0')
-            except InvalidOperation as e:
-                print(f"Invalid operation in division: {str(e)}")
-                return Decimal('0')
-
-            # Validate result
+            result = numerator / denominator
             if not result.is_finite():
-                print("Non-finite result detected")
                 return Decimal('0')
 
-            # Round to 10 decimal places for financial ratios
-            try:
-                return result.quantize(Decimal('0.0000000000'), rounding=ROUND_HALF_UP)
-            except InvalidOperation as e:
-                print(f"Error during rounding: {str(e)}")
-                return Decimal('0')
+            return result.quantize(Decimal('0.0000000000'), rounding=ROUND_HALF_UP)
 
         except Exception as e:
-            print(f"Unexpected error in division: {str(e)}")
+            print(f"Division error: {str(e)}")
             return Decimal('0')
+
+    # [Previous process_files and create_consolidated_report methods remain the same]
+
 
     def process_files(self):
         try:
@@ -164,6 +190,7 @@ class FinancialAnalyzer:
                     year = file_path.stem
                     print(f"\nProcessing year {year}...")
 
+                    # Read Excel file
                     df = pd.read_excel(
                         file_path,
                         engine='openpyxl',
@@ -171,7 +198,7 @@ class FinancialAnalyzer:
                         dtype=str
                     )
 
-                    # Initialize variables dictionary with zeros
+                    # Initialize variables dictionary with zeros for all keys
                     variables = {key: Decimal('0') for key in self.variables_mapping.keys()}
 
                     # Calculate variables
@@ -183,10 +210,11 @@ class FinancialAnalyzer:
                         else:
                             print(f"Warning: Zero value found for {var_key} in {year}")
 
-                    # Calculate ratios only if we have all required values
-                    try:
-                        ratios = {}
+                    # Initialize ratios dictionary
+                    ratios = {}
 
+                    # Calculate ratios only if we have valid values
+                    try:
                         if variables["دارایی‌های جاری"] != 0 and variables["بدهی‌های جاری"] != 0:
                             ratios["نسبت جاری"] = self.safe_divide(variables["دارایی‌های جاری"],
                                                                    variables["بدهی‌های جاری"])
@@ -278,14 +306,15 @@ class FinancialAnalyzer:
                     'num_format': '#,##0.0000000000'
                 })
 
+                # In create_consolidated_report method:
                 number_format = workbook.add_format({
-                    'num_format': '#,##0.0000000000',  # 10 decimal places
+                    'num_format': '#,##0.0000000000',
                     'border': 1,
                     'align': 'right',
                     'font_name': 'B Nazanin'
                 })
 
-                # Create DataFrames with high precision
+                # Create DataFrames with exact precision
                 variables_df = pd.DataFrame(all_years_data['variables']).round(10)
                 ratios_df = pd.DataFrame(all_years_data['ratios']).round(10)
 
