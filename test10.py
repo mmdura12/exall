@@ -93,11 +93,18 @@ class FinancialAnalyzer:
                 "جمع کل بدهی‌ها",
                 "جمع بدهی ها",
                 "جمع کل بدهی ها"
+            ],
+            "موجودی نقد": [
+                "موجودی نقد",
+                "وجه نقد",
+                "موجودی نقد و معادل نقد",
+                "نقد",
+                "وجوه نقد"
             ]
         }
 
     def get_value_by_row(self, df, search_terms):
-        """Enhanced value extraction with better pattern matching"""
+        """Enhanced value extraction with better pattern matching for Persian financial statements"""
         try:
             if isinstance(search_terms, str):
                 search_terms = [search_terms]
@@ -107,44 +114,59 @@ class FinancialAnalyzer:
 
             for search_term in search_terms:
                 # Clean search term
-                clean_search = search_term.replace('‌', '').replace('\u200c', '')
+                clean_search = search_term.replace('‌', ' ').replace('\u200c', ' ').strip()
 
-                # First try exact match in the last column
-                last_col = df.shape[1] - 1
-                for idx, row in df.iterrows():
-                    cell_value = str(row.iloc[last_col]).replace('‌', '').replace('\u200c', '')
-                    if clean_search in cell_value:
-                        # Look for the value in the first column
-                        value = row.iloc[0]
-                        if pd.notna(value) and str(value).strip() not in ['', '-', '0']:
-                            try:
-                                # Clean and convert the value
-                                cleaned_value = str(value).strip()
-                                cleaned_value = cleaned_value.replace(',', '')
-                                cleaned_value = cleaned_value.replace('٫', '.')
-                                cleaned_value = cleaned_value.replace('−', '-')
-                                cleaned_value = cleaned_value.replace('(', '-')
-                                cleaned_value = cleaned_value.replace(')', '')
+                # Search through all columns and rows
+                for col in range(df.shape[1]):
+                    for idx, row in df.iterrows():
+                        cell_value = str(row.iloc[col]).replace('‌', ' ').replace('\u200c', ' ').strip()
 
-                                # Convert Persian numbers
-                                persian_numbers = '۰۱۲۳۴۵۶۷۸۹'
-                                english_numbers = '0123456789'
-                                for persian, english in zip(persian_numbers, english_numbers):
-                                    cleaned_value = cleaned_value.replace(persian, english)
+                        # Check if search term is in the cell
+                        if clean_search in cell_value:
+                            # Look for numeric values in all columns of this row
+                            for value_col in range(df.shape[1]):
+                                value = str(row.iloc[value_col]).strip()
 
-                                decimal_value = Decimal(cleaned_value)
-                                if decimal_value != 0:
-                                    print(f"Found value for {search_term}: {float(decimal_value):,.2f}")
-                                    return decimal_value
-                            except (ValueError, TypeError):
-                                continue
+                                # Skip empty or non-numeric cells
+                                if not value or value in ['-', 'nan', 'None']:
+                                    continue
 
-            print(f"No valid value found for {search_terms[0]}")
+                                try:
+                                    # Clean and convert the value
+                                    cleaned_value = value.replace(',', '')
+                                    cleaned_value = cleaned_value.replace('٫', '.')
+                                    cleaned_value = cleaned_value.replace('−', '-')
+                                    cleaned_value = cleaned_value.replace('(', '-')
+                                    cleaned_value = cleaned_value.replace(')', '')
+
+                                    # Convert Persian numbers to English
+                                    persian_numbers = '۰۱۲۳۴۵۶۷۸۹'
+                                    english_numbers = '0123456789'
+                                    for persian, english in zip(persian_numbers, english_numbers):
+                                        cleaned_value = cleaned_value.replace(persian, english)
+
+                                    # Remove any remaining non-numeric characters except decimal point and minus
+                                    cleaned_value = ''.join(c for c in cleaned_value
+                                                            if c.isdigit() or c in '.-')
+
+                                    if cleaned_value:
+                                        decimal_value = Decimal(cleaned_value)
+                                        if decimal_value != 0:
+                                            print(f"Found value for {search_term}: {float(decimal_value):,.2f}")
+                                            return decimal_value
+                                except (ValueError, TypeError, InvalidOperation):
+                                    continue
+
+                print(f"No valid value found for {search_terms[0]}")
+                return Decimal('0')
+
             return Decimal('0')
 
         except Exception as e:
             print(f"Error processing {search_terms[0]}: {str(e)}")
             return Decimal('0')
+
+
 
     def safe_divide(self, numerator, denominator):
         """Precise division for financial calculations"""
@@ -191,24 +213,41 @@ class FinancialAnalyzer:
                     print(f"\nProcessing year {year}...")
 
                     # Read Excel file
+                    # In the process_files method, update the Excel reading part:
+
                     df = pd.read_excel(
                         file_path,
                         engine='openpyxl',
                         header=None,
-                        dtype=str
+                        dtype=str,
+                        na_filter=False  # This prevents pandas from converting empty cells to NaN
                     )
+
+                    # Remove any completely empty rows and columns
+                    df = df.dropna(how='all').dropna(axis=1, how='all')
 
                     # Initialize variables dictionary with zeros for all keys
                     variables = {key: Decimal('0') for key in self.variables_mapping.keys()}
 
                     # Calculate variables
+                    # In process_files method, update the variables calculation part:
+
+                    # Calculate variables with multiple attempts
                     for var_key, search_terms in self.variables_mapping.items():
-                        raw_value = self.get_value_by_row(df, search_terms)
+                        raw_value = Decimal('0')
+
+                        # Try each search term
+                        for term in search_terms:
+                            raw_value = self.get_value_by_row(df, term)
+                            if raw_value != Decimal('0'):
+                                break
+
                         if raw_value != Decimal('0'):
-                            variables[var_key] = raw_value / Decimal('1000000.0')  # Convert to millions
+                            # Convert to millions and store
+                            variables[var_key] = raw_value / Decimal('1000000.0')
                             print(f"{var_key}: {float(variables[var_key]):,.10f}")
                         else:
-                            print(f"Warning: Zero value found for {var_key} in {year}")
+                            print(f"Warning: No value found for {var_key} in {year}")
 
                     # Initialize ratios dictionary
                     ratios = {}
