@@ -166,21 +166,22 @@ class FinancialAnalyzer:
             return Decimal('0')
 
     def find_value_in_df(self, df: pd.DataFrame, search_terms: List[str]) -> Decimal:
-        """یافتن مقدار در دیتافریم"""
+        """یافتن مقدار در دیتافریم با پشتیبانی از فرمت‌های مختلف"""
         try:
+            max_value = Decimal('0')  # برای یافتن بزرگترین مقدار معتبر
             for term in search_terms:
                 term = self.clean_persian_text(term)
                 for idx, row in df.iterrows():
                     for col in df.columns:
                         cell_value = self.clean_persian_text(str(row[col]))
                         if term in cell_value:
-                            # جستجو در همان ردیف برای یافتن عدد
+                            # جستجو در کل ردیف برای یافتن عدد
                             for value_col in df.columns:
                                 value = str(row[value_col])
                                 number = self.convert_to_number(value)
-                                if number != 0:
-                                    return number
-            return Decimal('0')
+                                if number > max_value:  # انتخاب بزرگترین مقدار معتبر
+                                    max_value = number
+            return max_value
 
         except Exception as e:
             print(f"خطا در جستجوی مقدار: {str(e)}")
@@ -280,42 +281,60 @@ class FinancialAnalyzer:
             print(f"خطا در محاسبه نسبت‌های مالی: {str(e)}")
             return {}
 
-        def calculate_ratios(variable_data):
-            """محاسبه نسبت‌های مالی"""
+        def calculate_financial_ratios(self, variables: Dict[str, Decimal]) -> Dict[str, Decimal]:
+            """محاسبه نسبت‌های مالی با اصلاحات"""
             try:
-                sales = variable_data.get("فروش", 0)
-                if sales == 0:
-                    sales = 1  # برای جلوگیری از تقسیم بر صفر
+                ratios = {}
 
-                # محاسبه بهای تمام شده اگر صفر باشد
-                if variable_data["بهای تمام شده کالای فروش رفته"] == 0:
-                    gross_profit = variable_data.get("سود ناخالص", 0)
-                    if sales > 0 and gross_profit > 0:
-                        cogs = sales - gross_profit
-                        if cogs > 0:
-                            variable_data["بهای تمام شده کالای فروش رفته"] = cogs
-                            print(f"بهای تمام شده محاسبه شده: {cogs:,.0f}")
+                # محاسبه بهای تمام شده اگر صفر است
+                if variables["بهای تمام شده کالای فروش رفته"] == 0 and variables["فروش"] > 0 and variables[
+                    "سود ناخالص"] > 0:
+                    variables["بهای تمام شده کالای فروش رفته"] = variables["فروش"] - variables["سود ناخالص"]
 
-                ratios_data = {
-                    "نسبت جاری": safe_divide(variable_data["دارایی جاری"], variable_data["بدهی جاری"]),
-                    "نسبت آنی": safe_divide(
-                        variable_data["دارایی جاری"] - variable_data["موجودی کالا"],
-                        variable_data["بدهی جاری"]
-                    ),
-                    "نسبت وجه نقد": safe_divide(variable_data["وجه نقد"], variable_data["بدهی جاری"]),
-                    "بازده دارایی ها": safe_divide(variable_data["سود خالص"], variable_data["کل دارایی ها"]) * 100,
-                    "بازده حقوق صاحبان سهام": safe_divide(variable_data["سود خالص"],
-                                                          variable_data["حقوق صاحبان سهام"]) * 100,
-                    "حاشیه سود خالص": safe_divide(variable_data["سود خالص"], sales) * 100,
-                    "حاشیه سود عملیاتی": safe_divide(variable_data["سود عملیاتی"], sales) * 100,
-                    "حاشیه سود ناخالص": safe_divide(variable_data["سود ناخالص"], sales) * 100,
-                    "دوره وصول مطالبات": safe_divide(variable_data["حساب دریافتنی"] * 365, sales),
-                    "گردش حساب دریافتنی": safe_divide(sales, variable_data["حساب دریافتنی"]),
-                    "گردش موجودی کالا": safe_divide(variable_data["بهای تمام شده کالای فروش رفته"],
-                                                    variable_data["موجودی کالا"]),
-                    "نسبت بدهی به دارایی": safe_divide(variable_data["کل بدهی ها"], variable_data["کل دارایی ها"]) * 100
-                }
-                return ratios_data
+                # نسبت‌های نقدینگی
+                if variables["بدهی جاری"] != 0:
+                    ratios["نسبت جاری"] = self.safe_divide(variables["دارایی جاری"], variables["بدهی جاری"])
+                    ratios["نسبت آنی"] = self.safe_divide(variables["دارایی جاری"] - variables["موجودی کالا"],
+                                                          variables["بدهی جاری"])
+                    ratios["نسبت وجه نقد"] = self.safe_divide(variables["وجه نقد"], variables["بدهی جاری"])
+
+                # نسبت‌های سودآوری با بررسی اضافی
+                if variables["فروش"] != 0:
+                    ratios["حاشیه سود ناخالص"] = self.safe_divide(variables["سود ناخالص"], variables["فروش"]) * Decimal(
+                        '100')
+                    ratios["حاشیه سود عملیاتی"] = self.safe_divide(variables["سود عملیاتی"],
+                                                                   variables["فروش"]) * Decimal('100')
+                    ratios["حاشیه سود خالص"] = self.safe_divide(variables["سود خالص"], variables["فروش"]) * Decimal(
+                        '100')
+
+                # نسبت‌های بازده با بررسی مقادیر منفی
+                if variables["کل دارایی ها"] > 0:
+                    ratios["بازده دارایی ها"] = self.safe_divide(variables["سود خالص"],
+                                                                 variables["کل دارایی ها"]) * Decimal('100')
+
+                if variables["حقوق صاحبان سهام"] > 0:
+                    ratios["بازده حقوق صاحبان سهام"] = self.safe_divide(variables["سود خالص"],
+                                                                        variables["حقوق صاحبان سهام"]) * Decimal('100')
+
+                # نسبت‌های فعالیت با اصلاحات
+                if variables["فروش"] > 0:
+                    ratios["دوره وصول مطالبات"] = self.safe_divide(variables["حساب دریافتنی"] * Decimal('365'),
+                                                                   variables["فروش"])
+                    if variables["حساب دریافتنی"] > 0:
+                        ratios["گردش حساب دریافتنی"] = self.safe_divide(variables["فروش"], variables["حساب دریافتنی"])
+
+                # گردش موجودی کالا با بررسی مقادیر
+                if variables["موجودی کالا"] > 0 and variables["بهای تمام شده کالای فروش رفته"] > 0:
+                    ratios["گردش موجودی کالا"] = self.safe_divide(variables["بهای تمام شده کالای فروش رفته"],
+                                                                  variables["موجودی کالا"])
+
+                # نسبت‌های اهرمی
+                if variables["کل دارایی ها"] > 0:
+                    ratios["نسبت بدهی به دارایی"] = self.safe_divide(variables["کل بدهی ها"],
+                                                                     variables["کل دارایی ها"]) * Decimal('100')
+
+                return ratios
+
             except Exception as e:
                 print(f"خطا در محاسبه نسبت‌های مالی: {str(e)}")
                 return {}
