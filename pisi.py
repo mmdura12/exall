@@ -36,98 +36,46 @@ plt.rcParams.update({
 
 class FinancialAnalyzer:
     def __init__(self, input_folder: str):
-        """
-        مقداردهی اولیه کلاس تحلیلگر مالی
-        Args:
-            input_folder (str): مسیر پوشه حاوی فایل‌های اکسل
-        """
-        # تبدیل مسیر به شیء Path
         self.input_folder = Path(input_folder)
-
-        # تنظیم زمان فعلی برای نام‌گذاری فایل‌ها
         self.current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # ایجاد پوشه خروجی
         self.output_dir = self.input_folder / "Financial_Reports"
         self.output_dir.mkdir(exist_ok=True)
 
-        # تنظیمات نمودار
-        plt.style.use('default')
-        plt.rcParams.update({
-            'figure.figsize': (12, 8),
-            'axes.grid': True,
-            'grid.alpha': 0.3,
-            'axes.labelsize': 12,
-            'axes.titlesize': 14,
-            'xtick.labelsize': 10,
-            'ytick.labelsize': 10,
-            'legend.fontsize': 10,
-            'lines.linewidth': 2,
-            'lines.markersize': 8
-        })
-
         # تعریف عبارات جستجو برای متغیرها
         self.search_terms = {
-            "وجه نقد": [
-                "موجودی نقد", "وجه نقد", "موجودی نقد و بانک",
-                "نقد و معادل نقد", "موجودی نقد و معادل نقد"
-            ],
-            "حساب دریافتنی": [
-                "حسابهای دریافتنی تجاری", "دریافتنی‌های تجاری",
-                "حساب‌های دریافتنی", "حسابها و اسناد دریافتنی تجاری"
-            ],
-            "موجودی کالا": [
-                "موجودی مواد و کالا", "موجودی کالا", "موجودی‌ها",
-                "موجودی مواد، کالا و قطعات", "موجودی مواد اولیه و کالا"
-            ],
-            "دارایی جاری": [
-                "جمع دارایی‌های جاری", "دارایی‌های جاری",
-                "جمع دارایی های جاری", "دارایی های جاری"
-            ],
-            "کل دارایی ها": [
-                "جمع دارایی‌ها", "جمع کل دارایی‌ها",
-                "دارایی‌ها", "جمع دارایی ها"
-            ],
-            "بدهی جاری": [
-                "جمع بدهی‌های جاری", "بدهی‌های جاری",
-                "جمع بدهی های جاری", "بدهی های جاری"
-            ],
-            "کل بدهی ها": [
-                "جمع بدهی‌ها", "جمع کل بدهی‌ها",
-                "بدهی‌ها", "جمع بدهی ها"
-            ],
-            "حقوق صاحبان سهام": [
-                "جمع حقوق صاحبان سهام", "حقوق صاحبان سهام",
-                "جمع حقوق مالکانه", "حقوق مالکانه"
-            ],
-            "فروش": [
-                "درآمدهای عملیاتی", "فروش", "فروش خالص",
-                "درآمد عملیاتی", "جمع درآمدهای عملیاتی"
-            ],
-            "بهای تمام شده کالای فروش رفته": [
-                "بهای تمام‌شده درآمدهای عملیاتی",
-                "بهای تمام شده کالای فروش رفته",
-                "بهای تمام شده فروش"
-            ],
-            "سود ناخالص": [
-                "سود ناخالص", "سود (زیان) ناخالص",
-                "سود و زیان ناخالص"
-            ],
-            "سود عملیاتی": [
-                "سود عملیاتی", "سود (زیان) عملیاتی",
-                "سود و زیان عملیاتی"
-            ],
-            "سود خالص": [
-                "سود خالص", "سود (زیان) خالص",
-                "سود (زیان) خالص دوره"
-            ]
+            "وجه نقد": ["موجودی نقد", "وجه نقد", "موجودی نقد و بانک",
+                        "نقد و معادل نقد", "موجودی نقد و معادل نقد"],
+            "حساب دریافتنی": ["حسابهای دریافتنی تجاری", "دریافتنی‌های تجاری",
+                              "حساب‌های دریافتنی", "حسابها و اسناد دریافتنی تجاری"],
+            "موجودی کالا": ["موجودی مواد و کالا", "موجودی کالا", "موجودی‌ها",
+                            "موجودی مواد، کالا و قطعات", "موجودی مواد اولیه و کالا"],
+            "دارایی جاری": ["جمع دارایی‌های جاری", "دارایی‌های جاری",
+                            "جمع دارایی های جاری", "دارایی های جاری"],
+            "کل دارایی ها": ["جمع دارایی‌ها", "جمع کل دارایی‌ها",
+                             "دارایی‌ها", "جمع دارایی ها"],
+            "بدهی جاری": ["جمع بدهی‌های جاری", "بدهی‌های جاری",
+                          "جمع بدهی های جاری", "بدهی های جاری"],
+            "کل بدهی ها": ["جمع بدهی‌ها", "جمع کل بدهی‌ها",
+                           "بدهی‌ها", "جمع بدهی ها"],
+            "حقوق صاحبان سهام": ["جمع حقوق صاحبان سهام", "حقوق صاحبان سهام",
+                                 "جمع حقوق مالکانه", "حقوق مالکانه"],
+            "فروش": ["درآمدهای عملیاتی", "فروش", "فروش خالص",
+                     "درآمد عملیاتی", "جمع درآمدهای عملیاتی"],
+            "بهای تمام شده کالای فروش رفته": ["بهای تمام‌شده درآمدهای عملیاتی",
+                                              "بهای تمام شده کالای فروش رفته",
+                                              "بهای تمام شده فروش"],
+            "سود ناخالص": ["سود ناخالص", "سود (زیان) ناخالص",
+                           "سود و زیان ناخالص"],
+            "سود عملیاتی": ["سود عملیاتی", "سود (زیان) عملیاتی",
+                            "سود و زیان عملیاتی"],
+            "سود خالص": ["سود خالص", "سود (زیان) خالص",
+                         "سود (زیان) خالص دوره"]
         }
 
     def clean_persian_text(self, text: str) -> str:
         """پاکسازی متن فارسی"""
         if not isinstance(text, str):
             return ''
-        # حذف فاصله‌های اضافی و یکسان‌سازی کاراکترها
         text = re.sub(r'\s+', ' ', text)
         text = text.replace('ي', 'ی').replace('ك', 'ک')
         text = text.replace('٠', '۰').replace('١', '۱').replace('٢', '۲')
@@ -142,53 +90,60 @@ class FinancialAnalyzer:
             if pd.isna(value) or not str(value).strip():
                 return Decimal('0')
 
-            value = str(value)
+            value = str(value).strip()
+
+            # حذف کاراکترهای خاص و فرمت‌بندی
+            value = value.replace(',', '').replace('٬', '')
+
+            # تبدیل اعداد منفی در پرانتز
+            if '(' in value and ')' in value:
+                value = '-' + value.replace('(', '').replace(')', '')
+
+            # تبدیل انواع خط تیره به منفی
+            value = value.replace('−', '-').replace('–', '-')
+
             # تبدیل اعداد فارسی به انگلیسی
             persian_nums = '۰۱۲۳۴۵۶۷۸۹'
             english_nums = '0123456789'
             for persian, english in zip(persian_nums, english_nums):
                 value = value.replace(persian, english)
 
-            # پاکسازی متن
-            value = value.replace(',', '').replace('٬', '')
-            value = value.replace('(', '-').replace(')', '')
-            value = value.replace('−', '-').replace('–', '-')
-
-            # حذف همه کاراکترها بجز اعداد و علامت‌های خاص
+            # حذف همه کاراکترها بجز اعداد، نقطه و منفی
             value = ''.join(c for c in value if c.isdigit() or c in '.-')
 
-            if value:
-                return Decimal(value)
-            return Decimal('0')
+            if not value or value in ('-', '--'):
+                return Decimal('0')
+
+            return Decimal(value)
 
         except Exception as e:
-            print(f"خطا در تبدیل مقدار {value} به عدد: {str(e)}")
+            print(f"خطا در تبدیل '{value}' به عدد: {e}")
             return Decimal('0')
 
     def find_value_in_df(self, df: pd.DataFrame, search_terms: List[str]) -> Decimal:
-        """یافتن مقدار در دیتافریم با دقت بالا"""
+        """یافتن مقدار در دیتافریم"""
         try:
-            found_value = None
             for term in search_terms:
-                term = self.clean_persian_text(term)
+                cleaned_term = self.clean_persian_text(term)
                 for idx, row in df.iterrows():
-                    for col in df.columns:
-                        cell_value = self.clean_persian_text(str(row[col]))
-                        if term in cell_value:
-                            # جستجو در همان سطر
-                            row_values = [str(row[c]) for c in df.columns]
-                            # بررسی تمام مقادیر عددی در سطر
-                            for value in row_values:
-                                try:
+                    found_in_row = False
+                    # اول در ستون اول (معمولاً نام حساب) جستجو می‌کنیم
+                    if cleaned_term in self.clean_persian_text(str(row.iloc[0])):
+                        found_in_row = True
+                    if found_in_row:
+                        # در بقیه ستون‌ها دنبال عدد می‌گردیم
+                        for i in range(1, len(row)):
+                            try:
+                                value = str(row.iloc[i]).strip()
+                                if value and value not in ['-', '--']:
                                     number = self.convert_to_number(value)
-                                    if number != 0:  # اگر عدد معتبر یافت شد
-                                        if found_value is None or abs(number) > abs(found_value):
-                                            found_value = number
-                                except:
-                                    continue
-            return found_value if found_value is not None else Decimal('0')
+                                    if number != 0:  # اگر عدد معتبر پیدا شد
+                                        return number
+                            except:
+                                continue
+            return Decimal('0')
         except Exception as e:
-            print(f"خطا در جستجوی مقدار برای {search_terms}: {str(e)}")
+            print(f"خطا در جستجوی {search_terms}: {e}")
             return Decimal('0')
 
     @staticmethod
@@ -208,72 +163,54 @@ class FinancialAnalyzer:
             return result.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         except Exception as e:
-            print(f"خطا در تقسیم: {str(e)}")
+            print(f"خطا در تقسیم {numerator} بر {denominator}: {str(e)}")
             return Decimal('0')
 
         def calculate_financial_ratios(self, variables: Dict[str, Decimal]) -> Dict[str, Decimal]:
-            """محاسبه نسبت‌های مالی با دقت بالا"""
+            """محاسبه نسبت‌های مالی"""
             try:
                 ratios = {}
 
-                # محاسبه بهای تمام شده اگر صفر باشد
+                # محاسبه بهای تمام شده اگر صفر است
                 if variables["بهای تمام شده کالای فروش رفته"] == 0 and variables["فروش"] > 0 and variables[
                     "سود ناخالص"] > 0:
                     variables["بهای تمام شده کالای فروش رفته"] = variables["فروش"] - variables["سود ناخالص"]
-                    print(f"بهای تمام شده محاسبه شده: {float(variables['بهای تمام شده کالای فروش رفته']):,.0f}")
 
                 # نسبت‌های نقدینگی
                 if variables["بدهی جاری"] > 0:
                     ratios["نسبت جاری"] = self.safe_divide(variables["دارایی جاری"], variables["بدهی جاری"])
-                    ratios["نسبت آنی"] = self.safe_divide(
-                        variables["دارایی جاری"] - variables["موجودی کالا"],
-                        variables["بدهی جاری"]
-                    )
+                    ratios["نسبت آنی"] = self.safe_divide(variables["دارایی جاری"] - variables["موجودی کالا"],
+                                                          variables["بدهی جاری"])
                     ratios["نسبت وجه نقد"] = self.safe_divide(variables["وجه نقد"], variables["بدهی جاری"])
 
-                # نسبت‌های سودآوری با بررسی دقیق مقادیر
+                # نسبت‌های سودآوری
                 if variables["فروش"] > 0:
-                    # محاسبه حاشیه‌های سود
-                    ratios["حاشیه سود ناخالص"] = self.safe_divide(variables["سود ناخالص"], variables["فروش"]) * Decimal(
-                        '100')
-                    ratios["حاشیه سود عملیاتی"] = self.safe_divide(variables["سود عملیاتی"],
-                                                                   variables["فروش"]) * Decimal('100')
-                    ratios["حاشیه سود خالص"] = self.safe_divide(variables["سود خالص"], variables["فروش"]) * Decimal(
-                        '100')
+                    ratios["حاشیه سود ناخالص"] = self.safe_divide(variables["سود ناخالص"], variables["فروش"]) * 100
+                    ratios["حاشیه سود عملیاتی"] = self.safe_divide(variables["سود عملیاتی"], variables["فروش"]) * 100
+                    ratios["حاشیه سود خالص"] = self.safe_divide(variables["سود خالص"], variables["فروش"]) * 100
 
-                    # نسبت‌های فعالیت
-                    if variables["حساب دریافتنی"] > 0:
-                        ratios["دوره وصول مطالبات"] = self.safe_divide(
-                            variables["حساب دریافتنی"] * Decimal('365'),
-                            variables["فروش"]
-                        )
-                        ratios["گردش حساب دریافتنی"] = self.safe_divide(
-                            variables["فروش"],
-                            variables["حساب دریافتنی"]
-                        )
+                # نسبت‌های فعالیت
+                if variables["فروش"] > 0 and variables["حساب دریافتنی"] > 0:
+                    ratios["دوره وصول مطالبات"] = self.safe_divide(variables["حساب دریافتنی"] * 365, variables["فروش"])
+                    ratios["گردش حساب دریافتنی"] = self.safe_divide(variables["فروش"], variables["حساب دریافتنی"])
 
-                # گردش موجودی کالا
                 if variables["موجودی کالا"] > 0 and variables["بهای تمام شده کالای فروش رفته"] > 0:
-                    ratios["گردش موجودی کالا"] = self.safe_divide(
-                        variables["بهای تمام شده کالای فروش رفته"],
-                        variables["موجودی کالا"]
-                    )
+                    ratios["گردش موجودی کالا"] = self.safe_divide(variables["بهای تمام شده کالای فروش رفته"],
+                                                                  variables["موجودی کالا"])
 
-                # نسبت‌های بازده
+                # نسبت‌های اهرمی و بازده
                 if variables["کل دارایی ها"] > 0:
-                    ratios["بازده دارایی ها"] = self.safe_divide(variables["سود خالص"],
-                                                                 variables["کل دارایی ها"]) * Decimal('100')
+                    ratios["بازده دارایی ها"] = self.safe_divide(variables["سود خالص"], variables["کل دارایی ها"]) * 100
                     ratios["نسبت بدهی به دارایی"] = self.safe_divide(variables["کل بدهی ها"],
-                                                                     variables["کل دارایی ها"]) * Decimal('100')
+                                                                     variables["کل دارایی ها"]) * 100
 
                 if variables["حقوق صاحبان سهام"] > 0:
                     ratios["بازده حقوق صاحبان سهام"] = self.safe_divide(variables["سود خالص"],
-                                                                        variables["حقوق صاحبان سهام"]) * Decimal('100')
+                                                                        variables["حقوق صاحبان سهام"]) * 100
 
                 return ratios
-
             except Exception as e:
-                print(f"خطا در محاسبه نسبت‌های مالی: {str(e)}")
+                print(f"خطا در محاسبه نسبت‌های مالی: {e}")
                 return {}
 
         def convert_to_number(self, value: str) -> Decimal:
@@ -313,37 +250,23 @@ class FinancialAnalyzer:
                 print(f"خطا در تبدیل مقدار {value} به عدد: {str(e)}")
                 return Decimal('0')
 
-    def process_file(self, file_path: Path) -> Tuple[Dict[str, Decimal], Dict[str, Decimal]]:
+    def process_file(self, file_path: Path) -> tuple:
         """پردازش فایل اکسل و استخراج داده‌ها"""
         try:
-            # خواندن فایل اکسل
-            df = pd.read_excel(
-                file_path,
-                header=None,
-                dtype=str,
-                na_filter=False
-            )
+            print(f"\nدر حال پردازش فایل: {file_path.name}")
+            df = pd.read_excel(file_path, header=None, dtype=str)
 
-            # استخراج متغیرها
             variables = {}
-            print("\nاستخراج متغیرها:")
             for var_name, search_terms in self.search_terms.items():
                 value = self.find_value_in_df(df, search_terms)
                 variables[var_name] = value
                 print(f"{var_name}: {float(value):,.0f}")
 
-            # محاسبه نسبت‌ها
-            print("\nمحاسبه نسبت‌های مالی:")
             ratios = self.calculate_financial_ratios(variables)
-
-            # نمایش نسبت‌ها
-            for ratio_name, ratio_value in ratios.items():
-                print(f"{ratio_name}: {float(ratio_value):.2f}")
-
             return variables, ratios
 
         except Exception as e:
-            print(f"خطا در پردازش فایل {file_path.name}: {str(e)}")
+            print(f"خطا در پردازش فایل {file_path.name}: {e}")
             return {}, {}
 
     def create_excel_report(self, all_data: Dict, company_name: str):
@@ -571,45 +494,128 @@ def combine_financial_data(folder_path, output_file):
 
         print(f"فایل ترکیب‌شده با موفقیت ذخیره شد: {output_file}")
 
+
 def main():
-    """تابع اصلی برنامه"""
+    """تابع اصلی برنامه برای تحلیل و مقایسه مالی شرکت‌ها"""
     try:
         # نمایش اطلاعات شروع برنامه
         current_time = datetime.now()
-        print("\n=== سیستم تحلیل مالی ===")
+        print("\n" + "=" * 50)
+        print("=== سیستم تحلیل و مقایسه مالی شرکت‌ها ===")
+        print("=" * 50)
         print(f"تاریخ و زمان: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"کاربر: {os.getenv('USERNAME', 'mmdura12')}")
         print("-" * 50 + "\n")
 
-        # دریافت مسیر پوشه
-        input_folder = input("لطفا مسیر پوشه حاوی فایل‌های اکسل را وارد کنید: ").strip()
+        # دریافت و اعتبارسنجی مسیر پوشه
+        while True:
+            input_folder = input("لطفا مسیر پوشه حاوی فایل‌های اکسل را وارد کنید: ").strip()
 
-        if not os.path.exists(input_folder):
-            print("خطا: مسیر وارد شده معتبر نیست!")
-            return
+            if not input_folder:
+                print("خطا: مسیر نمی‌تواند خالی باشد!")
+                continue
 
-        try:
-            print("\nدر حال آماده‌سازی آنالایزر...")
-            analyzer = FinancialAnalyzer(input_folder)
-            print("آنالایزر با موفقیت ایجاد شد.")
-        except Exception as e:
-            print(f"خطا در ایجاد آنالایزر: {str(e)}")
-            return
+            if not os.path.exists(input_folder):
+                print("خطا: مسیر وارد شده وجود ندارد!")
+                if input("آیا می‌خواهید دوباره تلاش کنید؟ (بله/خیر) ").lower() != 'بله':
+                    return
+                continue
 
-        # دریافت نام شرکت
-        company_name = input("\nنام شرکت را وارد کنید: ").strip()
-        if not company_name:
-            print("خطا: نام شرکت نمی‌تواند خالی باشد!")
-            return
+            excel_files = [f for f in os.listdir(input_folder) if f.endswith(('.xlsx', '.xls'))]
+            if not excel_files:
+                print("خطا: هیچ فایل اکسلی در این مسیر یافت نشد!")
+                if input("آیا می‌خواهید مسیر دیگری وارد کنید؟ (بله/خیر) ").lower() != 'بله':
+                    return
+                continue
 
-        # اجرای تحلیل
-        results = analyzer.analyze_company(company_name)
+            break
 
-        if results:
-            print("\nتحلیل با موفقیت انجام شد!")
-            print(f"گزارش‌ها در پوشه {analyzer.output_dir} ذخیره شده‌اند.")
-        else:
-            print("\nخطا در انجام تحلیل!")
+        # ایجاد آنالایزر
+        print("\nدر حال آماده‌سازی آنالایزر...")
+        analyzer = FinancialAnalyzer(input_folder)
+        print("آنالایزر با موفقیت ایجاد شد.")
+
+        # لیست برای ذخیره نتایج همه شرکت‌ها
+        all_companies_results = {}
+
+        while True:
+            # دریافت نام شرکت‌ها
+            company_names = []
+            print("\nلطفا نام شرکت‌ها را وارد کنید (برای پایان 'پایان' را وارد کنید):")
+            while True:
+                company_name = input(f"نام شرکت {len(company_names) + 1}: ").strip()
+                if company_name.lower() == 'پایان':
+                    break
+                if not company_name:
+                    print("نام شرکت نمی‌تواند خالی باشد!")
+                    continue
+
+                # بررسی وجود فایل‌های مربوط به شرکت
+                matching_files = [f for f in excel_files if company_name in f]
+                if not matching_files:
+                    print(f"هیچ فایلی برای شرکت '{company_name}' یافت نشد!")
+                    continue
+
+                company_names.append(company_name)
+                print(f"تعداد {len(matching_files)} فایل برای شرکت {company_name} یافت شد:")
+                for file in matching_files:
+                    print(f"- {file}")
+
+                if len(company_names) >= 5:  # حداکثر 5 شرکت
+                    print("حداکثر تعداد شرکت‌ها (5) وارد شده است.")
+                    break
+
+            if not company_names:
+                print("هیچ شرکتی برای تحلیل وارد نشده است!")
+                if input("آیا می‌خواهید دوباره تلاش کنید؟ (بله/خیر) ").lower() != 'بله':
+                    break
+                continue
+
+            print("\n=== شروع تحلیل شرکت‌ها ===")
+
+            # تحلیل هر شرکت
+            for company_name in company_names:
+                print(f"\nتحلیل شرکت {company_name}...")
+                results = analyzer.analyze_company(company_name)
+                if results:
+                    all_companies_results[company_name] = results
+                    print(f"تحلیل شرکت {company_name} با موفقیت انجام شد.")
+                else:
+                    print(f"خطا در تحلیل شرکت {company_name}")
+
+            # مقایسه نتایج اگر بیش از یک شرکت وجود دارد
+            if len(all_companies_results) > 1:
+                print("\n=== مقایسه شرکت‌ها ===")
+
+                # ایجاد فایل مقایسه‌ای
+                comparison_file = os.path.join(analyzer.output_dir,
+                                               f"Companies_Comparison_{current_time.strftime('%Y%m%d_%H%M%S')}.xlsx")
+
+                with pd.ExcelWriter(comparison_file) as writer:
+                    # مقایسه نسبت‌ها
+                    comparison_ratios = {}
+                    for company, data in all_companies_results.items():
+                        latest_year = max(data['ratios'].keys())
+                        comparison_ratios[company] = data['ratios'][latest_year]
+
+                    pd.DataFrame(comparison_ratios).to_excel(writer, sheet_name='مقایسه نسبت‌ها')
+
+                    # مقایسه متغیرها
+                    comparison_vars = {}
+                    for company, data in all_companies_results.items():
+                        latest_year = max(data['variables'].keys())
+                        comparison_vars[company] = data['variables'][latest_year]
+
+                    pd.DataFrame(comparison_vars).to_excel(writer, sheet_name='مقایسه متغیرها')
+
+                print(f"\nفایل مقایسه در مسیر زیر ذخیره شد:\n{comparison_file}")
+
+            # پرسش برای ادامه
+            if input("\nآیا می‌خواهید شرکت‌های دیگری را تحلیل کنید؟ (بله/خیر) ").lower() != 'بله':
+                break
+
+        print("\nتحلیل با موفقیت به پایان رسید!")
+        print(f"همه گزارش‌ها در پوشه {analyzer.output_dir} ذخیره شده‌اند.")
 
     except KeyboardInterrupt:
         print("\n\nبرنامه توسط کاربر متوقف شد.")
@@ -620,6 +626,7 @@ def main():
         print("\n" + "=" * 50)
         print("پایان برنامه")
         print("=" * 50)
+
 
 if __name__ == "__main__":
     main()
