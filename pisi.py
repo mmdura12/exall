@@ -166,25 +166,29 @@ class FinancialAnalyzer:
             return Decimal('0')
 
     def find_value_in_df(self, df: pd.DataFrame, search_terms: List[str]) -> Decimal:
-        """یافتن مقدار در دیتافریم با پشتیبانی از فرمت‌های مختلف"""
+        """یافتن مقدار در دیتافریم با دقت بالا"""
         try:
-            max_value = Decimal('0')  # برای یافتن بزرگترین مقدار معتبر
+            found_value = None
             for term in search_terms:
                 term = self.clean_persian_text(term)
                 for idx, row in df.iterrows():
                     for col in df.columns:
                         cell_value = self.clean_persian_text(str(row[col]))
                         if term in cell_value:
-                            # جستجو در کل ردیف برای یافتن عدد
-                            for value_col in df.columns:
-                                value = str(row[value_col])
-                                number = self.convert_to_number(value)
-                                if number > max_value:  # انتخاب بزرگترین مقدار معتبر
-                                    max_value = number
-            return max_value
-
+                            # جستجو در همان سطر
+                            row_values = [str(row[c]) for c in df.columns]
+                            # بررسی تمام مقادیر عددی در سطر
+                            for value in row_values:
+                                try:
+                                    number = self.convert_to_number(value)
+                                    if number != 0:  # اگر عدد معتبر یافت شد
+                                        if found_value is None or abs(number) > abs(found_value):
+                                            found_value = number
+                                except:
+                                    continue
+            return found_value if found_value is not None else Decimal('0')
         except Exception as e:
-            print(f"خطا در جستجوی مقدار: {str(e)}")
+            print(f"خطا در جستجوی مقدار برای {search_terms}: {str(e)}")
             return Decimal('0')
 
     @staticmethod
@@ -206,100 +210,30 @@ class FinancialAnalyzer:
         except Exception as e:
             print(f"خطا در تقسیم: {str(e)}")
             return Decimal('0')
-    def calculate_financial_ratios(self, variables: Dict[str, Decimal]) -> Dict[str, Decimal]:
-        """محاسبه نسبت‌های مالی"""
-        try:
-            ratios = {}
-
-            # نسبت‌های نقدینگی
-            ratios["نسبت جاری"] = self.safe_divide(
-                variables["دارایی جاری"],
-                variables["بدهی جاری"]
-            )
-
-            ratios["نسبت آنی"] = self.safe_divide(
-                variables["دارایی جاری"] - variables["موجودی کالا"],
-                variables["بدهی جاری"]
-            )
-
-            ratios["نسبت وجه نقد"] = self.safe_divide(
-                variables["وجه نقد"],
-                variables["بدهی جاری"]
-            )
-
-            # نسبت‌های سودآوری
-            ratios["بازده دارایی ها"] = self.safe_divide(
-                variables["سود خالص"],
-                variables["کل دارایی ها"]
-            ) * Decimal('100')
-
-            ratios["بازده حقوق صاحبان سهام"] = self.safe_divide(
-                variables["سود خالص"],
-                variables["حقوق صاحبان سهام"]
-            ) * Decimal('100')
-
-            ratios["حاشیه سود خالص"] = self.safe_divide(
-                variables["سود خالص"],
-                variables["فروش"]
-            ) * Decimal('100')
-
-            ratios["حاشیه سود عملیاتی"] = self.safe_divide(
-                variables["سود عملیاتی"],
-                variables["فروش"]
-            ) * Decimal('100')
-
-            ratios["حاشیه سود ناخالص"] = self.safe_divide(
-                variables["سود ناخالص"],
-                variables["فروش"]
-            ) * Decimal('100')
-
-            # نسبت‌های فعالیت
-            ratios["دوره وصول مطالبات"] = self.safe_divide(
-                variables["حساب دریافتنی"] * Decimal('365'),
-                variables["فروش"]
-            )
-
-            ratios["گردش حساب دریافتنی"] = self.safe_divide(
-                variables["فروش"],
-                variables["حساب دریافتنی"]
-            )
-
-            ratios["گردش موجودی کالا"] = self.safe_divide(
-                variables["بهای تمام شده کالای فروش رفته"],
-                variables["موجودی کالا"]
-            )
-
-            # نسبت‌های اهرمی
-            ratios["نسبت بدهی به دارایی"] = self.safe_divide(
-                variables["کل بدهی ها"],
-                variables["کل دارایی ها"]
-            ) * Decimal('100')
-
-            return ratios
-
-        except Exception as e:
-            print(f"خطا در محاسبه نسبت‌های مالی: {str(e)}")
-            return {}
 
         def calculate_financial_ratios(self, variables: Dict[str, Decimal]) -> Dict[str, Decimal]:
-            """محاسبه نسبت‌های مالی با اصلاحات"""
+            """محاسبه نسبت‌های مالی با دقت بالا"""
             try:
                 ratios = {}
 
-                # محاسبه بهای تمام شده اگر صفر است
+                # محاسبه بهای تمام شده اگر صفر باشد
                 if variables["بهای تمام شده کالای فروش رفته"] == 0 and variables["فروش"] > 0 and variables[
                     "سود ناخالص"] > 0:
                     variables["بهای تمام شده کالای فروش رفته"] = variables["فروش"] - variables["سود ناخالص"]
+                    print(f"بهای تمام شده محاسبه شده: {float(variables['بهای تمام شده کالای فروش رفته']):,.0f}")
 
                 # نسبت‌های نقدینگی
-                if variables["بدهی جاری"] != 0:
+                if variables["بدهی جاری"] > 0:
                     ratios["نسبت جاری"] = self.safe_divide(variables["دارایی جاری"], variables["بدهی جاری"])
-                    ratios["نسبت آنی"] = self.safe_divide(variables["دارایی جاری"] - variables["موجودی کالا"],
-                                                          variables["بدهی جاری"])
+                    ratios["نسبت آنی"] = self.safe_divide(
+                        variables["دارایی جاری"] - variables["موجودی کالا"],
+                        variables["بدهی جاری"]
+                    )
                     ratios["نسبت وجه نقد"] = self.safe_divide(variables["وجه نقد"], variables["بدهی جاری"])
 
-                # نسبت‌های سودآوری با بررسی اضافی
-                if variables["فروش"] != 0:
+                # نسبت‌های سودآوری با بررسی دقیق مقادیر
+                if variables["فروش"] > 0:
+                    # محاسبه حاشیه‌های سود
                     ratios["حاشیه سود ناخالص"] = self.safe_divide(variables["سود ناخالص"], variables["فروش"]) * Decimal(
                         '100')
                     ratios["حاشیه سود عملیاتی"] = self.safe_divide(variables["سود عملیاتی"],
@@ -307,31 +241,34 @@ class FinancialAnalyzer:
                     ratios["حاشیه سود خالص"] = self.safe_divide(variables["سود خالص"], variables["فروش"]) * Decimal(
                         '100')
 
-                # نسبت‌های بازده با بررسی مقادیر منفی
+                    # نسبت‌های فعالیت
+                    if variables["حساب دریافتنی"] > 0:
+                        ratios["دوره وصول مطالبات"] = self.safe_divide(
+                            variables["حساب دریافتنی"] * Decimal('365'),
+                            variables["فروش"]
+                        )
+                        ratios["گردش حساب دریافتنی"] = self.safe_divide(
+                            variables["فروش"],
+                            variables["حساب دریافتنی"]
+                        )
+
+                # گردش موجودی کالا
+                if variables["موجودی کالا"] > 0 and variables["بهای تمام شده کالای فروش رفته"] > 0:
+                    ratios["گردش موجودی کالا"] = self.safe_divide(
+                        variables["بهای تمام شده کالای فروش رفته"],
+                        variables["موجودی کالا"]
+                    )
+
+                # نسبت‌های بازده
                 if variables["کل دارایی ها"] > 0:
                     ratios["بازده دارایی ها"] = self.safe_divide(variables["سود خالص"],
                                                                  variables["کل دارایی ها"]) * Decimal('100')
+                    ratios["نسبت بدهی به دارایی"] = self.safe_divide(variables["کل بدهی ها"],
+                                                                     variables["کل دارایی ها"]) * Decimal('100')
 
                 if variables["حقوق صاحبان سهام"] > 0:
                     ratios["بازده حقوق صاحبان سهام"] = self.safe_divide(variables["سود خالص"],
                                                                         variables["حقوق صاحبان سهام"]) * Decimal('100')
-
-                # نسبت‌های فعالیت با اصلاحات
-                if variables["فروش"] > 0:
-                    ratios["دوره وصول مطالبات"] = self.safe_divide(variables["حساب دریافتنی"] * Decimal('365'),
-                                                                   variables["فروش"])
-                    if variables["حساب دریافتنی"] > 0:
-                        ratios["گردش حساب دریافتنی"] = self.safe_divide(variables["فروش"], variables["حساب دریافتنی"])
-
-                # گردش موجودی کالا با بررسی مقادیر
-                if variables["موجودی کالا"] > 0 and variables["بهای تمام شده کالای فروش رفته"] > 0:
-                    ratios["گردش موجودی کالا"] = self.safe_divide(variables["بهای تمام شده کالای فروش رفته"],
-                                                                  variables["موجودی کالا"])
-
-                # نسبت‌های اهرمی
-                if variables["کل دارایی ها"] > 0:
-                    ratios["نسبت بدهی به دارایی"] = self.safe_divide(variables["کل بدهی ها"],
-                                                                     variables["کل دارایی ها"]) * Decimal('100')
 
                 return ratios
 
@@ -483,42 +420,45 @@ class FinancialAnalyzer:
         return variable_data
 
     def create_charts(self, all_data: Dict, company_name: str):
-        """ایجاد نمودارهای تحلیلی"""
+        """ایجاد نمودارهای تحلیلی با جزئیات بیشتر"""
         try:
             years = sorted(all_data['ratios'].keys())
 
-            # تنظیمات نمودار
-            plt.figure(figsize=(15, 10))
+            # ایجاد نمودارهای جداگانه برای هر گروه نسبت
+            ratio_groups = {
+                'نسبت‌های نقدینگی': ['نسبت جاری', 'نسبت آنی', 'نسبت وجه نقد'],
+                'نسبت‌های سودآوری': ['حاشیه سود ناخالص', 'حاشیه سود عملیاتی', 'حاشیه سود خالص'],
+                'نسبت‌های بازده': ['بازده دارایی ها', 'بازده حقوق صاحبان سهام'],
+                'نسبت‌های فعالیت': ['گردش حساب دریافتنی', 'گردش موجودی کالا', 'دوره وصول مطالبات']
+            }
 
-            # نمودار روند نسبت‌های مهم
-            important_ratios = [
-                "نسبت جاری",
-                "حاشیه سود خالص",
-                "بازده حقوق صاحبان سهام",
-                "نسبت بدهی به دارایی"
-            ]
+            for group_name, ratios in ratio_groups.items():
+                plt.figure(figsize=(12, 6))
+                for ratio in ratios:
+                    values = [float(all_data['ratios'][year].get(ratio, 0)) for year in years]
+                    plt.plot(years, values, marker='o', linewidth=2, markersize=8, label=ratio)
 
-            for ratio in important_ratios:
-                values = [float(all_data['ratios'][year].get(ratio, 0)) for year in years]
-                plt.plot(years, values, marker='o', linewidth=2, markersize=8, label=ratio)
+                plt.title(f'{group_name} - {company_name}', fontsize=14, pad=20)
+                plt.xlabel('سال', fontsize=12)
+                plt.ylabel('مقدار', fontsize=12)
+                plt.grid(True, linestyle='--', alpha=0.7)
+                plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
-            plt.title(f'روند نسبت‌های مالی کلیدی - {company_name}', fontsize=14, pad=20)
-            plt.xlabel('سال', fontsize=12)
-            plt.ylabel('درصد', fontsize=12)
-            plt.grid(True, linestyle='--', alpha=0.7)
-            plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+                # تنظیمات ظاهری
+                plt.xticks(rotation=45)
+                plt.tight_layout()
 
-            # ذخیره نمودار
-            chart_path = self.output_dir / f"{company_name}_Financial_Ratios_{self.current_time}.png"
-            plt.savefig(chart_path, bbox_inches='tight', dpi=300)
-            plt.close()
+                # ذخیره نمودار
+                chart_path = self.output_dir / f"{company_name}_{group_name}_{self.current_time}.png"
+                plt.savefig(chart_path, bbox_inches='tight', dpi=300)
+                plt.close()
 
-            print(f"\nنمودار در مسیر زیر ذخیره شد:\n{chart_path}")
-            return chart_path
+            print("\nنمودارها با موفقیت ایجاد شدند.")
+            return True
 
         except Exception as e:
             print(f"خطا در ایجاد نمودار: {str(e)}")
-            return None
+            return False
 
     def analyze_company(self, company_name: str) -> Optional[Dict]:
         """تحلیل کامل یک شرکت"""
