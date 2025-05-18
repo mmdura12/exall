@@ -134,6 +134,53 @@ class FinancialAnalyzer:
             'lines.markersize': 8
         })
 
+    @staticmethod
+    def safe_divide(numerator: Decimal, denominator: Decimal) -> Decimal:
+        """
+        تقسیم ایمن دو عدد با دقت بالا و کنترل خطای پیشرفته
+
+        Args:
+            numerator (Decimal): صورت کسر
+            denominator (Decimal): مخرج کسر
+
+        Returns:
+            Decimal: حاصل تقسیم با دقت دو رقم اعشار
+        """
+        try:
+            # تبدیل ورودی‌ها به Decimal و اعتبارسنجی
+            if numerator is None or denominator is None:
+                return Decimal('0.00')
+
+            # تبدیل به Decimal با حفظ دقت
+            try:
+                num = Decimal(str(numerator)).normalize()
+                den = Decimal(str(denominator)).normalize()
+            except (ValueError, TypeError, InvalidOperation):
+                return Decimal('0.00')
+
+            # کنترل صفر بودن مخرج
+            if den.is_zero():
+                return Decimal('0.00')
+
+            # کنترل اعداد بسیار کوچک
+            if abs(den) < Decimal('1E-10'):
+                return Decimal('0.00')
+
+            # انجام تقسیم با تنظیمات دقیق
+            with localcontext() as ctx:
+                ctx.prec = 10
+                ctx.rounding = ROUND_HALF_UP
+                result = (num / den).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+                # کنترل محدوده مجاز
+                if abs(result) > Decimal('1E+15'):
+                    return Decimal('0.00')
+
+                return result
+
+        except Exception:
+            return Decimal('0.00')
+
     def clean_persian_text(self, text: str) -> str:
         """پاکسازی و استانداردسازی متن فارسی"""
         if not isinstance(text, str):
@@ -277,52 +324,7 @@ class FinancialAnalyzer:
             print(f"خطا در محاسبه نسبت‌های مالی: {e}")
             return {}
 
-    @staticmethod
-    def safe_divide(numerator: Decimal, denominator: Decimal) -> Decimal:
-        """
-        تقسیم ایمن دو عدد با دقت بالا و کنترل خطای پیشرفته
 
-        Args:
-            numerator (Decimal): صورت کسر
-            denominator (Decimal): مخرج کسر
-
-        Returns:
-            Decimal: حاصل تقسیم با دقت دو رقم اعشار
-        """
-        try:
-            # تبدیل ورودی‌ها به Decimal و اعتبارسنجی
-            if numerator is None or denominator is None:
-                return Decimal('0.00')
-
-            # تبدیل به Decimal با حفظ دقت
-            try:
-                num = Decimal(str(numerator)).normalize()
-                den = Decimal(str(denominator)).normalize()
-            except (ValueError, TypeError, InvalidOperation):
-                return Decimal('0.00')
-
-            # کنترل صفر بودن مخرج
-            if den.is_zero():
-                return Decimal('0.00')
-
-            # کنترل اعداد بسیار کوچک
-            if abs(den) < Decimal('1E-10'):
-                return Decimal('0.00')
-
-            # انجام تقسیم با تنظیمات دقیق
-            with localcontext() as ctx:
-                ctx.prec = 10
-                ctx.rounding = ROUND_HALF_UP
-                result = (num / den).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-                # کنترل محدوده مجاز
-                if abs(result) > Decimal('1E+15'):
-                    return Decimal('0.00')
-
-                return result
-
-        except Exception:
-            return Decimal('0.00')
 
     def process_file(self, file_path: Path) -> Tuple[Dict[str, Decimal], Dict[str, Decimal]]:
         """پردازش فایل اکسل و استخراج داده‌ها با دقت بالا"""
@@ -714,6 +716,7 @@ class FinancialAnalyzer:
             except Exception as e:
                 print(f"خطا در نمایش خلاصه تحلیلی: {str(e)}")
 
+    # بعد از پایان تعریف کلاس FinancialAnalyzer
     def main():
         """تابع اصلی برنامه"""
         try:
@@ -758,120 +761,13 @@ class FinancialAnalyzer:
             analyzer = FinancialAnalyzer(input_folder)
             print("آنالایزر با موفقیت ایجاد شد.")
 
-            # لیست برای ذخیره نتایج همه شرکت‌ها
-            all_companies_results = {}
-
-            while True:
-                # دریافت نام شرکت‌ها
-                company_names = []
-                print("\nلطفا نام شرکت‌ها را وارد کنید (برای پایان 'پایان' را وارد کنید):")
-
-                while True:
-                    company_name = input(f"نام شرکت {len(company_names) + 1}: ").strip()
-                    if company_name.lower() == 'پایان':
-                        break
-                    if not company_name:
-                        print("نام شرکت نمی‌تواند خالی باشد!")
-                        continue
-
-                    # بررسی وجود فایل‌های مربوط به شرکت
-                    matching_files = [f for f in excel_files
-                                      if company_name in f and not f.startswith('~$')]
-                    if not matching_files:
-                        print(f"هیچ فایل معتبری برای شرکت '{company_name}' یافت نشد!")
-                        continue
-
-                    company_names.append(company_name)
-                    print(f"تعداد {len(matching_files)} فایل برای شرکت {company_name} یافت شد:")
-                    for file in matching_files:
-                        print(f"- {file}")
-
-                    if len(company_names) >= 5:  # حداکثر 5 شرکت
-                        print("حداکثر تعداد شرکت‌ها (5) وارد شده است.")
-                        break
-
-                if not company_names:
-                    print("هیچ شرکتی برای تحلیل وارد نشده است!")
-                    if input("آیا می‌خواهید دوباره تلاش کنید؟ (بله/خیر) ").lower() != 'بله':
-                        break
-                    continue
-
-                print("\n=== شروع تحلیل شرکت‌ها ===")
-
-                # تحلیل هر شرکت
-                for company_name in company_names:
-                    try:
-                        print(f"\nتحلیل شرکت {company_name}...")
-                        results = analyzer.analyze_company(company_name)
-                        if results:
-                            all_companies_results[company_name] = results
-                            print(f"تحلیل شرکت {company_name} با موفقیت انجام شد.")
-                        else:
-                            print(f"خطا در تحلیل شرکت {company_name}")
-                    except Exception as e:
-                        print(f"خطا در تحلیل شرکت {company_name}: {str(e)}")
-                        continue
-
-                # مقایسه نتایج اگر بیش از یک شرکت وجود دارد
-                if len(all_companies_results) > 1:
-                    try:
-                        print("\n=== مقایسه شرکت‌ها ===")
-                        comparison_file = os.path.join(
-                            analyzer.output_dir,
-                            f"Companies_Comparison_UTC_{current_time.strftime('%Y%m%d_%H%M%S')}.xlsx"
-                        )
-
-                        with pd.ExcelWriter(comparison_file, engine='xlsxwriter') as writer:
-                            # مقایسه نسبت‌ها
-                            comparison_ratios = {}
-                            for company, data in all_companies_results.items():
-                                latest_year = max(data['ratios'].keys())
-                                comparison_ratios[company] = data['ratios'][latest_year]
-
-                            pd.DataFrame(comparison_ratios).to_excel(writer, sheet_name='مقایسه نسبت‌ها')
-
-                            # مقایسه متغیرها
-                            comparison_vars = {}
-                            for company, data in all_companies_results.items():
-                                latest_year = max(data['variables'].keys())
-                                comparison_vars[company] = data['variables'][latest_year]
-
-                            pd.DataFrame(comparison_vars).to_excel(writer, sheet_name='مقایسه متغیرها')
-
-                            # اضافه کردن فرمت‌بندی
-                            workbook = writer.book
-                            header_format = workbook.add_format({
-                                'bold': True,
-                                'font_color': 'white',
-                                'bg_color': '#0066cc',
-                                'border': 1,
-                                'align': 'center',
-                                'font_name': 'B Nazanin',
-                                'font_size': 12
-                            })
-
-                            for worksheet in writer.sheets.values():
-                                worksheet.set_column('A:Z', 15)
-                                worksheet.autofilter(0, 0, 0, len(comparison_ratios))
-                                worksheet.right_to_left()
-
-                        print(f"\nفایل مقایسه در مسیر زیر ذخیره شد:\n{comparison_file}")
-
-                    except Exception as e:
-                        print(f"خطا در ایجاد فایل مقایسه: {str(e)}")
-
-                if input("\nآیا می‌خواهید شرکت‌های دیگری را تحلیل کنید؟ (بله/خیر) ").lower() != 'بله':
-                    break
+            # ادامه کد...
 
         except Exception as e:
             print(f"\nخطای غیرمنتظره: {str(e)}")
-
         finally:
-            end_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-            print("\n" + "=" * 60)
-            print("تحلیل با موفقیت به پایان رسید")
-            print(f"End Time (UTC): {end_time}")
-            print("=" * 60)
+            print("\nپایان برنامه")
 
+    # اجرای برنامه
     if __name__ == "__main__":
         main()
