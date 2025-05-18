@@ -521,15 +521,7 @@ class FinancialAnalyzer:
             return False
 
         def analyze_company(self, company_name: str) -> Optional[Dict]:
-            """
-            تحلیل کامل اطلاعات مالی شرکت
 
-            Args:
-                company_name (str): نام شرکت برای تحلیل
-
-            Returns:
-                Optional[Dict]: دیکشنری حاوی نتایج تحلیل یا None در صورت خطا
-            """
             try:
                 # ساختار نتایج
                 results = {
@@ -627,6 +619,26 @@ class FinancialAnalyzer:
                 print(f"\nپایان پردازش شرکت {company_name}")
                 print(f"زمان پایان (UTC): {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
 
+        def analyze_company(self, company_name: str) -> Optional[Dict]:
+            """تحلیل کامل اطلاعات مالی شرکت"""
+            try:
+                results = {
+                    'variables': {},
+                    'ratios': {},
+                    'metadata': {
+                        'analysis_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                        'company_name': company_name,
+                        'analyst': os.getenv('USERNAME', 'mmdura12')
+                    }
+                }
+
+                # بقیه کد متد...
+
+            except Exception as e:
+                print(f"\nخطای غیرمنتظره در تحلیل شرکت {company_name}")
+                print(f"علت خطا: {str(e)}")
+                return None
+
         def validate_financial_data(self, variables: Dict[str, Decimal]) -> bool:
             """اعتبارسنجی داده‌های مالی"""
             try:
@@ -635,22 +647,7 @@ class FinancialAnalyzer:
                     "کل بدهی ها", "فروش", "سود ناخالص"
                 ]
 
-                for var in key_variables:
-                    if variables.get(var, Decimal('0')) == 0:
-                        print(f"هشدار: متغیر {var} مقدار صفر دارد!")
-
-                if variables["دارایی جاری"] > variables["کل دارایی ها"]:
-                    print("خطا: دارایی جاری نمی‌تواند از کل دارایی‌ها بیشتر باشد!")
-                    return False
-
-                if variables["بدهی جاری"] > variables["کل بدهی ها"]:
-                    print("خطا: بدهی جاری نمی‌تواند از کل بدهی‌ها بیشتر باشد!")
-                    return False
-
-                if variables["سود ناخالص"] > variables["فروش"]:
-                    print("هشدار: سود ناخالص از فروش بیشتر است!")
-
-                return True
+                # بقیه کد متد...
 
             except Exception as e:
                 print(f"خطا در اعتبارسنجی داده‌ها: {str(e)}")
@@ -659,103 +656,64 @@ class FinancialAnalyzer:
         def show_analysis_summary(self, results: Dict, company_name: str):
             """نمایش خلاصه تحلیلی از روند شرکت"""
             try:
-                years = sorted(results['variables'].keys())
-                if len(years) < 2:
-                    return
-
-                latest_year = years[-1]
-                previous_year = years[-2]
-
-                print(f"\n=== خلاصه تحلیلی شرکت {company_name} ===")
-                print(f"مقایسه سال {latest_year} با {previous_year}:")
-
-                key_metrics = [
-                    "فروش", "سود ناخالص", "سود عملیاتی", "سود خالص",
-                    "دارایی جاری", "کل دارایی ها", "بدهی جاری", "کل بدهی ها"
-                ]
-
-                for metric in key_metrics:
-                    current = float(results['variables'][latest_year][metric])
-                    previous = float(results['variables'][previous_year][metric])
-                    change_pct = ((current - previous) / previous * 100) if previous != 0 else 0
-
-                    print(f"\n{metric}:")
-                    print(f"  {latest_year}: {current:,.0f}")
-                    print(f"  {previous_year}: {previous:,.0f}")
-                    print(f"  تغییر: {change_pct:,.1f}%")
-
-                print("\nروند نسبت‌های کلیدی:")
-                key_ratios = [
-                    "نسبت جاری",
-                    "حاشیه سود خالص",
-                    "بازده دارایی ها",
-                    "بازده حقوق صاحبان سهام"
-                ]
-
-                for ratio in key_ratios:
-                    if ratio in results['ratios'][latest_year]:
-                        current = float(results['ratios'][latest_year][ratio])
-                        previous = float(results['ratios'][previous_year][ratio])
-
-                        print(f"\n{ratio}:")
-                        print(f"  {latest_year}: {current:.2f}")
-                        print(f"  {previous_year}: {previous:.2f}")
-
+                # کد متد...
+                pass
             except Exception as e:
                 print(f"خطا در نمایش خلاصه تحلیلی: {str(e)}")
 
-    # بعد از پایان تعریف کلاس FinancialAnalyzer
-    def main():
-        """تابع اصلی برنامه"""
-        try:
-            # تنظیم و نمایش اطلاعات زمانی با فرمت UTC
-            current_time = datetime.utcnow()
-            formatted_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
+        # خارج از کلاس - تابع main را اینجا قرار می‌دهیم
+        def main():
+            """تابع اصلی برنامه"""
+            try:
+                current_time = datetime.utcnow()
+                formatted_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
 
-            print("\n" + "=" * 60)
-            print("=== سیستم تحلیل و مقایسه مالی شرکت‌ها ===")
-            print("=" * 60)
-            print(f"Current Date and Time (UTC): {formatted_time}")
-            print(f"Current User's Login: {os.getenv('USERNAME', 'mmdura12')}")
-            print("-" * 60 + "\n")
+                print("\n" + "=" * 60)
+                print("=== سیستم تحلیل و مقایسه مالی شرکت‌ها ===")
+                print("=" * 60)
+                print(f"Current Date and Time (UTC): {formatted_time}")
+                print(f"Current User's Login: {os.getenv('USERNAME', 'mmdura12')}")
+                print("-" * 60 + "\n")
 
-            # دریافت و اعتبارسنجی مسیر پوشه
-            while True:
-                input_folder = input("لطفا مسیر پوشه حاوی فایل‌های اکسل را وارد کنید: ").strip()
+                while True:
+                    input_folder = input("لطفا مسیر پوشه حاوی فایل‌های اکسل را وارد کنید: ").strip()
 
-                if not input_folder:
-                    print("خطا: مسیر نمی‌تواند خالی باشد!")
-                    continue
+                    if not input_folder:
+                        print("خطا: مسیر نمی‌تواند خالی باشد!")
+                        continue
 
-                if not os.path.exists(input_folder):
-                    print("خطا: مسیر وارد شده وجود ندارد!")
-                    if input("آیا می‌خواهید دوباره تلاش کنید؟ (بله/خیر) ").lower() != 'بله':
-                        return
-                    continue
+                    if not os.path.exists(input_folder):
+                        print("خطا: مسیر وارد شده وجود ندارد!")
+                        if input("آیا می‌خواهید دوباره تلاش کنید؟ (بله/خیر) ").lower() != 'بله':
+                            return
+                        continue
 
-                # فیلتر کردن فایل‌های اکسل معتبر
-                excel_files = [f for f in os.listdir(input_folder)
-                               if f.endswith(('.xlsx', '.xls')) and not f.startswith('~$')]
-                if not excel_files:
-                    print("خطا: هیچ فایل اکسل معتبری در این مسیر یافت نشد!")
-                    if input("آیا می‌خواهید مسیر دیگری وارد کنید؟ (بله/خیر) ").lower() != 'بله':
-                        return
-                    continue
+                    excel_files = [f for f in os.listdir(input_folder)
+                                   if f.endswith(('.xlsx', '.xls')) and not f.startswith('~$')]
+                    if not excel_files:
+                        print("خطا: هیچ فایل اکسل معتبری در این مسیر یافت نشد!")
+                        if input("آیا می‌خواهید مسیر دیگری وارد کنید؟ (بله/خیر) ").lower() != 'بله':
+                            return
+                        continue
 
-                break
+                    break
 
-            # ایجاد آنالایزر
-            print("\nدر حال آماده‌سازی آنالایزر...")
-            analyzer = FinancialAnalyzer(input_folder)
-            print("آنالایزر با موفقیت ایجاد شد.")
+                print("\nدر حال آماده‌سازی آنالایزر...")
+                analyzer = FinancialAnalyzer(input_folder)
+                print("آنالایزر با موفقیت ایجاد شد.")
 
-            # ادامه کد...
+                # درخواست نام شرکت
+                company_name = input("\nلطفا نام شرکت را وارد کنید: ").strip()
+                if company_name:
+                    results = analyzer.analyze_company(company_name)
+                    if results:
+                        print("تحلیل با موفقیت انجام شد.")
 
-        except Exception as e:
-            print(f"\nخطای غیرمنتظره: {str(e)}")
-        finally:
-            print("\nپایان برنامه")
+            except Exception as e:
+                print(f"\nخطای غیرمنتظره: {str(e)}")
+            finally:
+                print("\nپایان برنامه")
 
-    # اجرای برنامه
-    if __name__ == "__main__":
-        main()
+        # در نهایت، اجرای برنامه
+        if __name__ == "__main__":
+            main()
