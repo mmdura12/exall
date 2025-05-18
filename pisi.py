@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
+from pathlib import Path
+
 # تنظیمات اولیه
 warnings.filterwarnings('ignore')
 getcontext().prec = 28
@@ -520,148 +523,182 @@ class FinancialAnalyzer:
             print(f"خطا در ایجاد نمودار: {str(e)}")
             return False
 
-        def analyze_company(self, company_name: str) -> Optional[Dict]:
+            # [همه import ها و تعریف کلاس FinancialAnalyzer تا قبل از analyze_company بدون تغییر بمانند]
 
-            try:
-                # ساختار نتایج
-                results = {
-                    'variables': {},
-                    'ratios': {},
-                    'metadata': {
-                        'analysis_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-                        'company_name': company_name,
-                        'analyst': os.getenv('USERNAME', 'mmdura12')
+            def analyze_company(self, company_name: str) -> Optional[Dict]:
+                """تحلیل کامل اطلاعات مالی شرکت"""
+                try:
+                    results = {
+                        'variables': {},
+                        'ratios': {},
+                        'metadata': {
+                            'analysis_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                            'company_name': company_name,
+                            'analyst': os.getenv('USERNAME', 'mmdura12')
+                        }
                     }
-                }
 
-                # یافتن و فیلتر کردن فایل‌های اکسل
-                try:
-                    files = sorted([
-                        f for f in self.input_folder.glob(f'*{company_name}*.xlsx')
-                        if not f.name.startswith('~$')
-                    ])
-                except Exception as e:
-                    print(f"\nخطا در جستجوی فایل‌ها: {str(e)}")
-                    return None
-
-                if not files:
-                    print(f"\nهیچ فایلی برای شرکت {company_name} یافت نشد!")
-                    return None
-
-                print(f"\nتعداد {len(files)} فایل برای پردازش یافت شد.")
-
-                # پردازش هر فایل
-                processed_files = 0
-                for file_path in files:
+                    # یافتن و فیلتر کردن فایل‌های اکسل
                     try:
-                        year_match = re.search(r'13([0-9]{2})', file_path.stem)
-                        if not year_match:
-                            print(f"نام فایل {file_path.name} فاقد سال معتبر است.")
-                            continue
-
-                        year = '14' + year_match.group(1)
-                        print(f"\nپردازش فایل سال {year}...")
-
-                        variables, ratios = self.process_file(file_path)
-
-                        if not variables or not ratios:
-                            print(f"خطا: داده‌های سال {year} خالی است!")
-                            continue
-
-                        if not self.validate_financial_data(variables):
-                            print(f"هشدار: داده‌های سال {year} نامعتبر است!")
-                            continue
-
-                        results['variables'][year] = variables
-                        results['ratios'][year] = ratios
-                        processed_files += 1
-                        print(f"پردازش سال {year} با موفقیت انجام شد.")
-
+                        files = sorted([
+                            f for f in self.input_folder.glob(f'*{company_name}*.xlsx')
+                            if not f.name.startswith('~$')
+                        ])
                     except Exception as e:
-                        print(f"خطا در پردازش فایل {file_path.name}: {str(e)}")
-                        continue
+                        print(f"\nخطا در جستجوی فایل‌ها: {str(e)}")
+                        return None
 
-                if not results['variables']:
-                    print("\nهیچ داده معتبری برای تحلیل یافت نشد!")
-                    return None
+                    if not files:
+                        print(f"\nهیچ فایلی برای شرکت {company_name} یافت نشد!")
+                        return None
 
-                print(f"\nتعداد {processed_files} فایل با موفقیت پردازش شد.")
+                    print(f"\nتعداد {len(files)} فایل برای پردازش یافت شد.")
 
-                try:
-                    print("\nدر حال ایجاد گزارش‌ها...")
-                    excel_file = self.create_excel_report(results, company_name)
+                    # پردازش هر فایل
+                    processed_files = 0
+                    for file_path in files:
+                        try:
+                            year_match = re.search(r'13([0-9]{2})', file_path.stem)
+                            if not year_match:
+                                print(f"نام فایل {file_path.name} فاقد سال معتبر است.")
+                                continue
 
-                    if not excel_file:
-                        print("خطا در ایجاد گزارش اکسل!")
+                            year = '14' + year_match.group(1)
+                            print(f"\nپردازش فایل سال {year}...")
+
+                            variables, ratios = self.process_file(file_path)
+
+                            if not variables or not ratios:
+                                print(f"خطا: داده‌های سال {year} خالی است!")
+                                continue
+
+                            if not self.validate_financial_data(variables):
+                                print(f"هشدار: داده‌های سال {year} نامعتبر است!")
+                                continue
+
+                            results['variables'][year] = variables
+                            results['ratios'][year] = ratios
+                            processed_files += 1
+                            print(f"پردازش سال {year} با موفقیت انجام شد.")
+
+                        except Exception as e:
+                            print(f"خطا در پردازش فایل {file_path.name}: {str(e)}")
+                            continue
+
+                    if not results['variables']:
+                        print("\nهیچ داده معتبری برای تحلیل یافت نشد!")
+                        return None
+
+                    print(f"\nتعداد {processed_files} فایل با موفقیت پردازش شد.")
+
+                    try:
+                        print("\nدر حال ایجاد گزارش‌ها...")
+                        excel_file = self.create_excel_report(results, company_name)
+
+                        if not excel_file:
+                            print("خطا در ایجاد گزارش اکسل!")
+                            return results
+
+                        print("\nدر حال ایجاد نمودارها...")
+                        if self.create_charts(results, company_name):
+                            print("نمودارها با موفقیت ایجاد شدند.")
+                        else:
+                            print("هشدار: خطا در ایجاد نمودارها")
+
+                        self.show_analysis_summary(results, company_name)
+
+                        print(f"\nتحلیل شرکت {company_name} با موفقیت انجام شد.")
                         return results
 
-                    print("\nدر حال ایجاد نمودارها...")
-                    if self.create_charts(results, company_name):
-                        print("نمودارها با موفقیت ایجاد شدند.")
-                    else:
-                        print("هشدار: خطا در ایجاد نمودارها")
-
-                    self.show_analysis_summary(results, company_name)
-
-                    print(f"\nتحلیل شرکت {company_name} با موفقیت انجام شد.")
-                    return results
+                    except Exception as e:
+                        print(f"\nخطا در ایجاد گزارش‌ها و نمودارها: {str(e)}")
+                        return results
 
                 except Exception as e:
-                    print(f"\nخطا در ایجاد گزارش‌ها و نمودارها: {str(e)}")
-                    return results
+                    print(f"\nخطای غیرمنتظره در تحلیل شرکت {company_name}")
+                    print(f"علت خطا: {str(e)}")
+                    return None
 
-            except Exception as e:
-                print(f"\nخطای غیرمنتظره در تحلیل شرکت {company_name}")
-                print(f"علت خطا: {str(e)}")
-                return None
+            def validate_financial_data(self, variables: Dict[str, Decimal]) -> bool:
+                """اعتبارسنجی داده‌های مالی"""
+                try:
+                    key_variables = [
+                        "دارایی جاری", "کل دارایی ها", "بدهی جاری",
+                        "کل بدهی ها", "فروش", "سود ناخالص"
+                    ]
 
-            finally:
-                print(f"\nپایان پردازش شرکت {company_name}")
-                print(f"زمان پایان (UTC): {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
+                    for var in key_variables:
+                        if variables.get(var, Decimal('0')) == 0:
+                            print(f"هشدار: متغیر {var} مقدار صفر دارد!")
 
-        def analyze_company(self, company_name: str) -> Optional[Dict]:
-            """تحلیل کامل اطلاعات مالی شرکت"""
-            try:
-                results = {
-                    'variables': {},
-                    'ratios': {},
-                    'metadata': {
-                        'analysis_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-                        'company_name': company_name,
-                        'analyst': os.getenv('USERNAME', 'mmdura12')
-                    }
-                }
+                    if variables["دارایی جاری"] > variables["کل دارایی ها"]:
+                        print("خطا: دارایی جاری نمی‌تواند از کل دارایی‌ها بیشتر باشد!")
+                        return False
 
-                # بقیه کد متد...
+                    if variables["بدهی جاری"] > variables["کل بدهی ها"]:
+                        print("خطا: بدهی جاری نمی‌تواند از کل بدهی‌ها بیشتر باشد!")
+                        return False
 
-            except Exception as e:
-                print(f"\nخطای غیرمنتظره در تحلیل شرکت {company_name}")
-                print(f"علت خطا: {str(e)}")
-                return None
+                    if variables["سود ناخالص"] > variables["فروش"]:
+                        print("هشدار: سود ناخالص از فروش بیشتر است!")
 
-        def validate_financial_data(self, variables: Dict[str, Decimal]) -> bool:
-            """اعتبارسنجی داده‌های مالی"""
-            try:
-                key_variables = [
-                    "دارایی جاری", "کل دارایی ها", "بدهی جاری",
-                    "کل بدهی ها", "فروش", "سود ناخالص"
-                ]
+                    return True
 
-                # بقیه کد متد...
+                except Exception as e:
+                    print(f"خطا در اعتبارسنجی داده‌ها: {str(e)}")
+                    return False
 
-            except Exception as e:
-                print(f"خطا در اعتبارسنجی داده‌ها: {str(e)}")
-                return False
+            def show_analysis_summary(self, results: Dict, company_name: str):
+                """نمایش خلاصه تحلیلی از روند شرکت"""
+                try:
+                    years = sorted(results['variables'].keys())
+                    if len(years) < 2:
+                        return
 
-        def show_analysis_summary(self, results: Dict, company_name: str):
-            """نمایش خلاصه تحلیلی از روند شرکت"""
-            try:
-                # کد متد...
-                pass
-            except Exception as e:
-                print(f"خطا در نمایش خلاصه تحلیلی: {str(e)}")
+                    latest_year = years[-1]
+                    previous_year = years[-2]
 
-        # خارج از کلاس - تابع main را اینجا قرار می‌دهیم
+                    print(f"\n=== خلاصه تحلیلی شرکت {company_name} ===")
+                    print(f"مقایسه سال {latest_year} با {previous_year}:")
+
+                    key_metrics = [
+                        "فروش", "سود ناخالص", "سود عملیاتی", "سود خالص",
+                        "دارایی جاری", "کل دارایی ها", "بدهی جاری", "کل بدهی ها"
+                    ]
+
+                    for metric in key_metrics:
+                        current = float(results['variables'][latest_year][metric])
+                        previous = float(results['variables'][previous_year][metric])
+                        change_pct = ((current - previous) / previous * 100) if previous != 0 else 0
+
+                        print(f"\n{metric}:")
+                        print(f"  {latest_year}: {current:,.0f}")
+                        print(f"  {previous_year}: {previous:,.0f}")
+                        print(f"  تغییر: {change_pct:,.1f}%")
+
+                    print("\nروند نسبت‌های کلیدی:")
+                    key_ratios = [
+                        "نسبت جاری",
+                        "حاشیه سود خالص",
+                        "بازده دارایی ها",
+                        "بازده حقوق صاحبان سهام"
+                    ]
+
+                    for ratio in key_ratios:
+                        if ratio in results['ratios'][latest_year]:
+                            current = float(results['ratios'][latest_year][ratio])
+                            previous = float(results['ratios'][previous_year][ratio])
+
+                            print(f"\n{ratio}:")
+                            print(f"  {latest_year}: {current:.2f}")
+                            print(f"  {previous_year}: {previous:.2f}")
+
+                except Exception as e:
+                    print(f"خطا در نمایش خلاصه تحلیلی: {str(e)}")
+
+        # پایان کلاس FinancialAnalyzer
+
+        # تابع اصلی برنامه - خارج از کلاس
         def main():
             """تابع اصلی برنامه"""
             try:
@@ -702,7 +739,6 @@ class FinancialAnalyzer:
                 analyzer = FinancialAnalyzer(input_folder)
                 print("آنالایزر با موفقیت ایجاد شد.")
 
-                # درخواست نام شرکت
                 company_name = input("\nلطفا نام شرکت را وارد کنید: ").strip()
                 if company_name:
                     results = analyzer.analyze_company(company_name)
@@ -714,6 +750,6 @@ class FinancialAnalyzer:
             finally:
                 print("\nپایان برنامه")
 
-        # در نهایت، اجرای برنامه
+        # اجرای برنامه
         if __name__ == "__main__":
             main()
