@@ -562,28 +562,24 @@ class FinancialAnalyzer:
                 processed_files = 0
                 for file_path in files:
                     try:
-                        # استخراج سال از نام فایل با الگوی دقیق‌تر
                         year_match = re.search(r'13([0-9]{2})', file_path.stem)
                         if not year_match:
                             print(f"نام فایل {file_path.name} فاقد سال معتبر است.")
                             continue
 
-                        year = '14' + year_match.group(1)  # تبدیل به فرمت 14XX
+                        year = '14' + year_match.group(1)
                         print(f"\nپردازش فایل سال {year}...")
 
-                        # پردازش فایل و استخراج داده‌ها
                         variables, ratios = self.process_file(file_path)
 
                         if not variables or not ratios:
                             print(f"خطا: داده‌های سال {year} خالی است!")
                             continue
 
-                        # اعتبارسنجی داده‌ها
                         if not self.validate_financial_data(variables):
                             print(f"هشدار: داده‌های سال {year} نامعتبر است!")
                             continue
 
-                        # ذخیره نتایج معتبر
                         results['variables'][year] = variables
                         results['ratios'][year] = ratios
                         processed_files += 1
@@ -593,7 +589,6 @@ class FinancialAnalyzer:
                         print(f"خطا در پردازش فایل {file_path.name}: {str(e)}")
                         continue
 
-                # بررسی وجود داده‌های معتبر
                 if not results['variables']:
                     print("\nهیچ داده معتبری برای تحلیل یافت نشد!")
                     return None
@@ -601,22 +596,19 @@ class FinancialAnalyzer:
                 print(f"\nتعداد {processed_files} فایل با موفقیت پردازش شد.")
 
                 try:
-                    # ایجاد گزارش اکسل
                     print("\nدر حال ایجاد گزارش‌ها...")
                     excel_file = self.create_excel_report(results, company_name)
 
                     if not excel_file:
                         print("خطا در ایجاد گزارش اکسل!")
-                        return results  # برگرداندن نتایج حتی در صورت خطا در ایجاد گزارش
+                        return results
 
-                    # ایجاد نمودارها
                     print("\nدر حال ایجاد نمودارها...")
                     if self.create_charts(results, company_name):
                         print("نمودارها با موفقیت ایجاد شدند.")
                     else:
                         print("هشدار: خطا در ایجاد نمودارها")
 
-                    # نمایش خلاصه تحلیلی
                     self.show_analysis_summary(results, company_name)
 
                     print(f"\nتحلیل شرکت {company_name} با موفقیت انجام شد.")
@@ -624,7 +616,7 @@ class FinancialAnalyzer:
 
                 except Exception as e:
                     print(f"\nخطا در ایجاد گزارش‌ها و نمودارها: {str(e)}")
-                    return results  # برگرداندن نتایج حتی در صورت خطا در ایجاد گزارش‌ها
+                    return results
 
             except Exception as e:
                 print(f"\nخطای غیرمنتظره در تحلیل شرکت {company_name}")
@@ -638,7 +630,6 @@ class FinancialAnalyzer:
         def validate_financial_data(self, variables: Dict[str, Decimal]) -> bool:
             """اعتبارسنجی داده‌های مالی"""
             try:
-                # بررسی مقادیر کلیدی
                 key_variables = [
                     "دارایی جاری", "کل دارایی ها", "بدهی جاری",
                     "کل بدهی ها", "فروش", "سود ناخالص"
@@ -648,7 +639,6 @@ class FinancialAnalyzer:
                     if variables.get(var, Decimal('0')) == 0:
                         print(f"هشدار: متغیر {var} مقدار صفر دارد!")
 
-                # بررسی روابط منطقی
                 if variables["دارایی جاری"] > variables["کل دارایی ها"]:
                     print("خطا: دارایی جاری نمی‌تواند از کل دارایی‌ها بیشتر باشد!")
                     return False
@@ -679,7 +669,6 @@ class FinancialAnalyzer:
                 print(f"\n=== خلاصه تحلیلی شرکت {company_name} ===")
                 print(f"مقایسه سال {latest_year} با {previous_year}:")
 
-                # تحلیل روند متغیرهای کلیدی
                 key_metrics = [
                     "فروش", "سود ناخالص", "سود عملیاتی", "سود خالص",
                     "دارایی جاری", "کل دارایی ها", "بدهی جاری", "کل بدهی ها"
@@ -695,7 +684,6 @@ class FinancialAnalyzer:
                     print(f"  {previous_year}: {previous:,.0f}")
                     print(f"  تغییر: {change_pct:,.1f}%")
 
-                # تحلیل روند نسبت‌های کلیدی
                 print("\nروند نسبت‌های کلیدی:")
                 key_ratios = [
                     "نسبت جاری",
