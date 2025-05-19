@@ -1,224 +1,209 @@
 import os
-import re
+import pandas as pd
 import warnings
 from datetime import datetime
-from decimal import (Decimal, getcontext, ROUND_HALF_UP,
-                    InvalidOperation, DivisionByZero, localcontext)
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Union
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-# تنظیمات اولیه
 warnings.filterwarnings('ignore')
-getcontext().prec = 28
 
 
 class FinancialAnalyzer:
-    def __init__(self, input_folder: str):
-        """مقداردهی اولیه کلاس تحلیلگر مالی"""
-        self.input_folder = Path(input_folder)
-        self.current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.output_dir = self.input_folder / "Financial_Reports"
-        self.output_dir.mkdir(exist_ok=True)
+    def __init__(self, base_folder):
+        self.base_folder = Path(base_folder)
+        self.output_folder = self.base_folder / 'reports'
+        self.output_folder.mkdir(exist_ok=True)
 
-        # تعریف متغیرهای مالی اصلی
-        self.financial_metrics = {
-            "دارایی جاری": 0,
-            "کل دارایی‌ها": 0,
-            "بدهی جاری": 0,
-            "کل بدهی‌ها": 0,
-            "فروش": 0,
-            "سود خالص": 0,
-            "سود عملیاتی": 0,
-            "سود ناخالص": 0,
-            "موجودی کالا": 0,
-            "حساب‌های دریافتنی": 0
-        }
+    def find_company_files(self, company_name):
+        """یافتن فایل‌های مربوط به یک شرکت"""
+        files = list(self.base_folder.glob(f'*{company_name}*.xlsx'))
+        return sorted(files)
 
-    def analyze_company(self, company_name: str) -> bool:
-        """تحلیل اطلاعات مالی شرکت"""
+    def read_financial_data(self, excel_file):
+        """خواندن اطلاعات مالی از فایل اکسل"""
         try:
-            print(f"\nشروع تحلیل شرکت {company_name}")
+            df = pd.read_excel(excel_file, engine='openpyxl')
 
-            # خواندن داده‌های مالی
-            if not self._read_financial_data():
-                return False
-
-            # محاسبه نسبت‌های مالی
-            ratios = self._calculate_ratios()
-            if not ratios:
-                return False
-
-            # نمایش نتایج
-            self._display_results(ratios)
-
-            # ذخیره گزارش
-            if not self._save_report(company_name, ratios):
-                return False
-
-            return True
-
+            # جستجوی مقادیر با استفاده از کلمات کلیدی
+            financial_data = {
+                'سال': str(excel_file).split('_')[-1].split('.')[0],  # استخراج سال از نام فایل
+                'دارایی جاری': self.find_value(df, ['دارایی جاری', 'دارایی های جاری']),
+                'کل دارایی ها': self.find_value(df, ['جمع دارایی', 'کل دارایی']),
+                'بدهی جاری': self.find_value(df, ['بدهی جاری', 'بدهی های جاری']),
+                'کل بدهی ها': self.find_value(df, ['جمع بدهی', 'کل بدهی']),
+                'فروش': self.find_value(df, ['فروش خالص', 'درآمد عملیاتی']),
+                'سود ناخالص': self.find_value(df, ['سود ناخالص']),
+                'سود عملیاتی': self.find_value(df, ['سود عملیاتی']),
+                'سود خالص': self.find_value(df, ['سود خالص']),
+                'موجودی کالا': self.find_value(df, ['موجودی کالا', 'موجودی مواد و کالا']),
+                'حساب های دریافتنی': self.find_value(df, ['حساب های دریافتنی تجاری'])
+            }
+            return financial_data
         except Exception as e:
-            print(f"خطا در تحلیل شرکت: {str(e)}")
-            return False
+            print(f"خطا در خواندن فایل {excel_file.name}: {e}")
+            return None
 
-    def _read_financial_data(self) -> bool:
-        """خواندن داده‌های مالی از فایل‌های اکسل"""
-        try:
-            # شبیه‌سازی خواندن داده‌ها
-            self.financial_metrics.update({
-                "دارایی جاری": 1500000000,
-                "کل دارایی‌ها": 3000000000,
-                "بدهی جاری": 800000000,
-                "کل بدهی‌ها": 1200000000,
-                "فروش": 2500000000,
-                "سود خالص": 400000000,
-                "سود عملیاتی": 500000000,
-                "سود ناخالص": 800000000,
-                "موجودی کالا": 400000000,
-                "حساب‌های دریافتنی": 300000000
-            })
-            return True
-        except Exception as e:
-            print(f"خطا در خواندن داده‌های مالی: {str(e)}")
-            return False
+    def find_value(self, df, keywords):
+        """یافتن مقدار با استفاده از کلمات کلیدی"""
+        for keyword in keywords:
+            try:
+                # جستجو در ستون‌ها
+                for col in df.columns:
+                    mask = df[col].astype(str).str.contains(keyword, case=False, na=False)
+                    if mask.any():
+                        row = df.loc[mask].iloc[0]
+                        # جستجوی عدد در سطر
+                        for col_name in df.columns:
+                            try:
+                                value = pd.to_numeric(row[col_name])
+                                if not pd.isna(value) and value != 0:
+                                    return value
+                            except:
+                                continue
+            except:
+                continue
+        return 0
 
-    def _calculate_ratios(self) -> dict:
+    def calculate_ratios(self, data):
         """محاسبه نسبت‌های مالی"""
         try:
-            m = self.financial_metrics
-            ratios = {
-                "نسبت‌های نقدینگی": {
-                    "نسبت جاری": self._safe_divide(m["دارایی جاری"], m["بدهی جاری"]),
-                    "نسبت آنی": self._safe_divide(m["دارایی جاری"] - m["موجودی کالا"], m["بدهی جاری"])
-                },
-                "نسبت‌های سودآوری": {
-                    "حاشیه سود ناخالص": self._safe_divide(m["سود ناخالص"], m["فروش"]),
-                    "حاشیه سود عملیاتی": self._safe_divide(m["سود عملیاتی"], m["فروش"]),
-                    "حاشیه سود خالص": self._safe_divide(m["سود خالص"], m["فروش"])
-                },
-                "نسبت‌های اهرمی": {
-                    "نسبت بدهی": self._safe_divide(m["کل بدهی‌ها"], m["کل دارایی‌ها"]),
-                    "پوشش بدهی": self._safe_divide(m["سود عملیاتی"], m["کل بدهی‌ها"])
-                },
-                "نسبت‌های فعالیت": {
-                    "گردش حساب‌های دریافتنی": self._safe_divide(m["فروش"], m["حساب‌های دریافتنی"]),
-                    "دوره وصول مطالبات": self._safe_divide(m["حساب‌های دریافتنی"] * 365, m["فروش"])
-                }
-            }
+            ratios = {}
+
+            # نسبت‌های نقدینگی
+            if data['بدهی جاری'] != 0:
+                ratios['نسبت جاری'] = data['دارایی جاری'] / data['بدهی جاری']
+                ratios['نسبت آنی'] = (data['دارایی جاری'] - data['موجودی کالا']) / data['بدهی جاری']
+
+            # نسبت‌های سودآوری
+            if data['فروش'] != 0:
+                ratios['حاشیه سود ناخالص'] = (data['سود ناخالص'] / data['فروش']) * 100
+                ratios['حاشیه سود عملیاتی'] = (data['سود عملیاتی'] / data['فروش']) * 100
+                ratios['حاشیه سود خالص'] = (data['سود خالص'] / data['فروش']) * 100
+
+            # نسبت‌های اهرمی
+            if data['کل دارایی ها'] != 0:
+                ratios['نسبت بدهی'] = (data['کل بدهی ها'] / data['کل دارایی ها']) * 100
+
             return ratios
         except Exception as e:
-            print(f"خطا در محاسبه نسبت‌ها: {str(e)}")
-            return {}
+            print(f"خطا در محاسبه نسبت‌ها: {e}")
+            return None
 
-    def _safe_divide(self, numerator: float, denominator: float) -> float:
-        """تقسیم ایمن اعداد"""
+    def analyze_companies(self, company_names):
+        """تحلیل چند شرکت"""
+        all_results = {}
+
+        for company_name in company_names:
+            print(f"\nتحلیل شرکت {company_name}:")
+            company_files = self.find_company_files(company_name)
+
+            if not company_files:
+                print(f"هیچ فایلی برای شرکت {company_name} یافت نشد!")
+                continue
+
+            company_data = {}
+            for file in company_files:
+                financial_data = self.read_financial_data(file)
+                if financial_data:
+                    year = financial_data['سال']
+                    ratios = self.calculate_ratios(financial_data)
+                    company_data[year] = {
+                        'financial_data': financial_data,
+                        'ratios': ratios
+                    }
+
+            if company_data:
+                all_results[company_name] = company_data
+                self.display_company_results(company_name, company_data)
+                self.save_company_report(company_name, company_data)
+
+        return all_results
+
+    def display_company_results(self, company_name, data):
+        """نمایش نتایج تحلیل یک شرکت"""
+        print(f"\n=== نتایج تحلیل شرکت {company_name} ===")
+
+        for year, year_data in sorted(data.items()):
+            print(f"\nسال {year}:")
+            print("اطلاعات مالی اصلی:")
+            for key, value in year_data['financial_data'].items():
+                if key != 'سال':
+                    print(f"{key}: {value:,.0f}")
+
+            print("\nنسبت‌های مالی:")
+            for key, value in year_data['ratios'].items():
+                print(f"{key}: {value:.2f}")
+
+    def save_company_report(self, company_name, data):
+        """ذخیره گزارش در اکسل"""
         try:
-            if denominator == 0:
-                return 0
-            return numerator / denominator
-        except:
-            return 0
+            filename = self.output_folder / f"{company_name}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-    def _display_results(self, ratios: dict):
-        """نمایش نتایج تحلیل"""
-        print("\n=== نتایج تحلیل مالی ===")
+            with pd.ExcelWriter(filename) as writer:
+                # تبدیل داده‌های مالی به دیتافریم
+                financial_data = []
+                ratios_data = []
 
-        # نمایش متغیرهای اصلی
-        print("\nمتغیرهای اصلی:")
-        for metric, value in self.financial_metrics.items():
-            print(f"{metric}: {self._format_number(value)} ریال")
+                for year, year_data in data.items():
+                    # داده‌های مالی
+                    for key, value in year_data['financial_data'].items():
+                        if key != 'سال':
+                            financial_data.append({
+                                'سال': year,
+                                'شاخص': key,
+                                'مقدار': value
+                            })
 
-        # نمایش نسبت‌ها
-        print("\nنسبت‌های مالی:")
-        for category, category_ratios in ratios.items():
-            print(f"\n{category}:")
-            for ratio_name, ratio_value in category_ratios.items():
-                print(f"{ratio_name}: {ratio_value:.2f}")
+                    # نسبت‌ها
+                    for key, value in year_data['ratios'].items():
+                        ratios_data.append({
+                            'سال': year,
+                            'نسبت': key,
+                            'مقدار': value
+                        })
 
-    def _save_report(self, company_name: str, ratios: dict) -> bool:
-        """ذخیره گزارش در فایل اکسل"""
-        try:
-            report_path = self.output_dir / f"گزارش_مالی_{company_name}_{self.current_time}.xlsx"
+                # ذخیره در شیت‌های جداگانه
+                pd.DataFrame(financial_data).to_excel(writer, sheet_name='اطلاعات مالی', index=False)
+                pd.DataFrame(ratios_data).to_excel(writer, sheet_name='نسبت‌های مالی', index=False)
 
-            # ایجاد دیتافریم‌ها برای ذخیره در اکسل
-            metrics_df = pd.DataFrame({
-                "متغیر": self.financial_metrics.keys(),
-                "مقدار": self.financial_metrics.values()
-            })
-
-            ratios_data = []
-            for category, category_ratios in ratios.items():
-                for ratio_name, ratio_value in category_ratios.items():
-                    ratios_data.append({
-                        "دسته": category,
-                        "نسبت": ratio_name,
-                        "مقدار": ratio_value
-                    })
-            ratios_df = pd.DataFrame(ratios_data)
-
-            # ذخیره در اکسل
-            with pd.ExcelWriter(report_path) as writer:
-                metrics_df.to_excel(writer, sheet_name='متغیرهای مالی', index=False)
-                ratios_df.to_excel(writer, sheet_name='نسبت‌های مالی', index=False)
-
-            print(f"\nگزارش در مسیر زیر ذخیره شد:\n{report_path}")
-            return True
+            print(f"\nگزارش در مسیر زیر ذخیره شد:\n{filename}")
 
         except Exception as e:
-            print(f"خطا در ذخیره گزارش: {str(e)}")
-            return False
+            print(f"خطا در ذخیره گزارش: {e}")
 
-    @staticmethod
-    def _format_number(number: float) -> str:
-        """فرمت‌بندی اعداد با جداکننده هزار"""
-        return f"{number:,.0f}"
 
-    def main():
-        try:
-            # نمایش اطلاعات برنامه
-            current_time = datetime.utcnow()
-            print(
-                f"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"Current User's Login: {os.getenv('USERNAME', 'mmdura12')}")
+def main():
+    try:
+        print("\n=== سیستم تحلیل مالی شرکت‌ها ===")
+        print(f"زمان اجرا: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-            # دریافت مسیر
-            while True:
-                input_folder = input("\nلطفا مسیر پوشه حاوی فایل‌های اکسل را وارد کنید: ").strip()
+        folder_path = input("\nلطفاً مسیر پوشه حاوی فایل‌های اکسل را وارد کنید: ").strip()
+        if not os.path.exists(folder_path):
+            print("خطا: مسیر وارد شده وجود ندارد!")
+            return
 
-                if not input_folder:
-                    print("خطا: مسیر نمی‌تواند خالی باشد!")
-                    continue
+        analyzer = FinancialAnalyzer(folder_path)
 
-                if not os.path.exists(input_folder):
-                    print("خطا: مسیر وارد شده وجود ندارد!")
-                    if input("آیا می‌خواهید دوباره تلاش کنید؟ (بله/خیر) ").lower() != 'بله':
-                        return
-                    continue
-
+        # دریافت نام شرکت‌ها
+        companies = []
+        print("\nلطفاً نام 5 شرکت را وارد کنید (برای پایان، Enter خالی بزنید):")
+        while len(companies) < 5:
+            company = input(f"نام شرکت {len(companies) + 1}: ").strip()
+            if not company:
                 break
+            companies.append(company)
 
-            # ایجاد آنالایزر
-            analyzer = FinancialAnalyzer(input_folder)
-
-            # دریافت و تحلیل اطلاعات شرکت
-            company_name = input("\nلطفا نام شرکت را وارد کنید: ").strip()
-            if not company_name:
-                print("خطا: نام شرکت نمی‌تواند خالی باشد!")
-                return
-
-            if analyzer.analyze_company(company_name):
+        if companies:
+            results = analyzer.analyze_companies(companies)
+            if results:
                 print("\nتحلیل با موفقیت انجام شد.")
             else:
                 print("\nخطا در انجام تحلیل!")
 
-        except Exception as e:
-            print(f"\nخطای غیرمنتظره: {str(e)}")
-        finally:
-            print("\nپایان برنامه")
+    except Exception as e:
+        print(f"\nخطای غیرمنتظره: {e}")
+    finally:
+        print("\nپایان برنامه")
 
-    if __name__ == "__main__":
-        main()
+
+if __name__ == "__main__":
+    main()
