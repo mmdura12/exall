@@ -14,121 +14,139 @@ class FinancialAnalyzer:
         self.output_folder = self.base_folder / 'reports'
         self.output_folder.mkdir(exist_ok=True)
 
-        # الگوهای جستجو برای یافتن مقادیر
+        # الگوهای جستجو برای متغیرهای مالی
         self.search_patterns = {
             'دارایی جاری': [
-                'جمع دارایی‌های جاری', 'جمع داراییهای جاری', 'دارایی‌های جاری',
-                'داراییهای جاری', 'دارایی های جاری', 'جمع دارایی های جاری'
+                'دارایی‌های جاری',
+                'داراییهای جاری',
+                'دارایی های جاری',
+                'جمع دارایی‌های جاری',
+                'جمع داراییهای جاری',
+                'جمع دارایی های جاری',
+                'جمع کل دارایی های جاری',
+                'دارایی جاری',
+                'دارایی‌جاری'
             ],
             'کل دارایی ها': [
-                'جمع دارایی‌ها', 'جمع داراییها', 'کل دارایی‌ها', 'دارایی ها',
-                'جمع دارایی ها', 'جمع کل داراییها'
+                'جمع دارایی‌ها',
+                'جمع داراییها',
+                'جمع کل دارایی‌ها',
+                'جمع کل داراییها',
+                'کل دارایی‌ها',
+                'کل داراییها',
+                'دارایی‌ها',
+                'داراییها',
+                'جمع دارایی ها'
             ],
             'بدهی جاری': [
-                'جمع بدهی‌های جاری', 'جمع بدهیهای جاری', 'بدهی‌های جاری',
-                'بدهیهای جاری', 'بدهی های جاری', 'جمع بدهی های جاری'
+                'بدهی‌های جاری',
+                'بدهیهای جاری',
+                'بدهی های جاری',
+                'جمع بدهی‌های جاری',
+                'جمع بدهیهای جاری',
+                'جمع بدهی های جاری',
+                'بدهی جاری',
+                'بدهی‌جاری'
             ],
             'کل بدهی ها': [
-                'جمع بدهی‌ها', 'جمع بدهیها', 'جمع کل بدهی‌ها', 'کل بدهی‌ها',
-                'بدهی ها', 'جمع بدهی ها'
+                'جمع بدهی‌ها',
+                'جمع بدهیها',
+                'جمع کل بدهی‌ها',
+                'جمع کل بدهیها',
+                'کل بدهی‌ها',
+                'کل بدهیها',
+                'بدهی‌ها',
+                'بدهیها',
+                'جمع بدهی ها'
             ],
             'فروش': [
-                'درآمدهای عملیاتی', 'درآمد عملیاتی', 'فروش خالص', 'فروش',
-                'درآمد حاصل از فروش'
+                'درآمدهای عملیاتی',
+                'درآمد عملیاتی',
+                'فروش خالص',
+                'فروش',
+                'درآمد حاصل از فروش',
+                'جمع فروش',
+                'جمع درآمد عملیاتی'
             ],
             'سود ناخالص': [
-                'سود ناخالص', 'سود (زیان) ناخالص', 'سود و زیان ناخالص'
+                'سود ناخالص',
+                'سود (زیان) ناخالص',
+                'سود/زیان ناخالص',
+                'سودناخالص'
             ],
             'سود عملیاتی': [
-                'سود عملیاتی', 'سود (زیان) عملیاتی', 'سود و زیان عملیاتی'
+                'سود عملیاتی',
+                'سود (زیان) عملیاتی',
+                'سود/زیان عملیاتی',
+                'سودعملیاتی'
             ],
             'سود خالص': [
-                'سود خالص', 'سود (زیان) خالص', 'سود خالص دوره'
+                'سود خالص',
+                'سود (زیان) خالص',
+                'سود/زیان خالص',
+                'سودخالص',
+                'سود خالص دوره'
             ],
             'موجودی کالا': [
-                'موجودی مواد و کالا', 'موجودی کالا', 'موجودی‌های مواد و کالا'
+                'موجودی مواد و کالا',
+                'موجودی کالا',
+                'موجودی‌های مواد و کالا',
+                'موجودی‌کالا',
+                'موجودیهای مواد و کالا'
             ],
             'حساب های دریافتنی': [
-                'حساب‌های دریافتنی تجاری', 'حسابهای دریافتنی', 'دریافتنی‌های تجاری'
+                'حساب‌های دریافتنی تجاری',
+                'حسابهای دریافتنی',
+                'دریافتنی‌های تجاری',
+                'حساب های دریافتنی تجاری',
+                'حسابهای دریافتنی تجاری'
             ]
         }
-
-    def clean_number(self, value):
-        """تمیز کردن و تبدیل مقادیر عددی"""
-        try:
-            if isinstance(value, (int, float)):
-                return float(value)
-
-            value = str(value).strip()
-            value = value.replace(',', '').replace('٬', '')
-            value = value.replace('(', '-').replace(')', '')
-            value = value.replace('−', '-').replace('–', '-')
-
-            # تبدیل اعداد فارسی به انگلیسی
-            persian_nums = {'۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
-                            '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'}
-            for persian, latin in persian_nums.items():
-                value = value.replace(persian, latin)
-
-            # حذف همه کاراکترها به جز اعداد و علامت‌های خاص
-            value = ''.join(c for c in value if c.isdigit() or c in '.-')
-
-            if value and value not in ['-', '.']:
-                return float(value)
-            return 0
-        except:
-            return 0
 
     def find_value_in_df(self, df, patterns):
         """جستجوی مقادیر در دیتافریم با دقت بیشتر"""
         try:
-            df = df.fillna('')
-            df = df.astype(str)
+            # تبدیل تمام سلول‌ها به رشته و پر کردن مقادیر خالی
+            df = df.astype(str).fillna('')
 
-            found_values = []
-
-            # جستجو در ماتریس اصلی
+            # برای هر الگو در لیست الگوها
             for pattern in patterns:
                 pattern = str(pattern).strip()
-                for idx, row in df.iterrows():
-                    for col in df.columns:
-                        cell = str(row[col]).strip()
-                        if pattern in cell:
-                            # بررسی سلول‌های مجاور
-                            for offset in [1, -1, 2, -2, 3, -3]:
-                                if 0 <= col + offset < len(df.columns):
-                                    value = self.clean_number(row[df.columns[col + offset]])
-                                    if value > 0:
-                                        found_values.append({
-                                            'value': value,
-                                            'location': f"سطر {idx + 1}, ستون {col + offset + 1}",
-                                            'keyword': pattern
-                                        })
 
-            # جستجو در ماتریس ترانسپوز شده
-            df_t = df.transpose()
-            for pattern in patterns:
-                pattern = str(pattern).strip()
-                for idx, row in df_t.iterrows():
-                    for col in df_t.columns:
-                        cell = str(row[col]).strip()
-                        if pattern in cell:
-                            for offset in [1, -1, 2, -2, 3, -3]:
-                                if 0 <= col + offset < len(df_t.columns):
-                                    value = self.clean_number(row[df_t.columns[col + offset]])
-                                    if value > 0:
-                                        found_values.append({
-                                            'value': value,
-                                            'location': f"سطر {col + 1}, ستون {idx + 1} (ترانسپوز)",
-                                            'keyword': pattern
-                                        })
+                # جستجو در تمام سطرها
+                for i in range(len(df)):
+                    row = df.iloc[i]
 
-            if found_values:
-                # انتخاب بزرگترین مقدار معتبر
-                max_value = max(found_values, key=lambda x: x['value'])
-                print(f"مقدار یافت شده برای '{max_value['keyword']}': "
-                      f"{max_value['value']:,.0f} در {max_value['location']}")
-                return max_value['value']
+                    # جستجو در هر سلول سطر
+                    for j in range(len(row)):
+                        cell_value = str(row[j]).strip()
+
+                        # اگر الگو در سلول پیدا شد
+                        if pattern in cell_value:
+                            # بررسی سلول بعدی در همان سطر
+                            if j + 1 < len(row):
+                                next_cell = str(row[j + 1]).strip()
+                                value = self.clean_number(next_cell)
+                                if value > 0:
+                                    print(f"مقدار یافت شده برای '{pattern}': {value:,.0f} در سطر {i + 1}")
+                                    return value
+
+                            # بررسی سلول قبلی در همان سطر
+                            if j - 1 >= 0:
+                                prev_cell = str(row[j - 1]).strip()
+                                value = self.clean_number(prev_cell)
+                                if value > 0:
+                                    print(f"مقدار یافت شده برای '{pattern}': {value:,.0f} در سطر {i + 1}")
+                                    return value
+
+                            # بررسی سلول‌های سمت راست تا 3 ستون
+                            for k in range(2, 4):
+                                if j + k < len(row):
+                                    right_cell = str(row[j + k]).strip()
+                                    value = self.clean_number(right_cell)
+                                    if value > 0:
+                                        print(f"مقدار یافت شده برای '{pattern}': {value:,.0f} در سطر {i + 1}")
+                                        return value
 
             print(f"مقدار {patterns[0]} یافت نشد")
             return 0
@@ -141,23 +159,67 @@ class FinancialAnalyzer:
         """خواندن داده‌های مالی از فایل اکسل"""
         try:
             print(f"\nخواندن فایل: {file_path}")
-            df = pd.read_excel(file_path, header=None)
+
+            # خواندن تمام شیت‌های فایل اکسل
+            all_sheets = pd.read_excel(file_path, sheet_name=None)
+
             data = {}
+            found_any = False
 
-            # استخراج مقادیر
-            for metric, patterns in self.search_patterns.items():
-                value = self.find_value_in_df(df, patterns)
-                if value > 0:  # فقط مقادیر مثبت را ذخیره می‌کنیم
-                    data[metric] = value
-                    print(f"{metric}: {value:,.0f}")
-                else:
-                    print(f"مقدار {metric} یافت نشد")
+            # بررسی هر شیت
+            for sheet_name, df in all_sheets.items():
+                print(f"بررسی شیت {sheet_name}")
 
-            return data
+                # استخراج مقادیر
+                for metric, patterns in self.search_patterns.items():
+                    if metric not in data:  # اگر قبلاً پیدا نشده
+                        value = self.find_value_in_df(df, patterns)
+                        if value > 0:
+                            data[metric] = value
+                            found_any = True
+
+            if found_any:
+                return data
+            else:
+                print("هیچ داده‌ای در فایل یافت نشد!")
+                return None
 
         except Exception as e:
             print(f"خطا در خواندن فایل: {str(e)}")
             return None
+
+    def clean_number(self, value):
+        """تمیز کردن و تبدیل مقادیر عددی"""
+        try:
+            if isinstance(value, (int, float)):
+                return float(value)
+
+            if not isinstance(value, str):
+                value = str(value)
+
+            # حذف کاراکترهای غیر عددی
+            value = value.replace(',', '').replace('٬', '')
+            value = value.replace('(', '-').replace(')', '')
+            value = value.replace('−', '-').replace('–', '-')
+            value = ''.join(c for c in value if c.isdigit() or c in '.-')
+
+            # تبدیل اعداد فارسی
+            persian_nums = {
+                '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+                '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+            }
+            for persian, latin in persian_nums.items():
+                value = value.replace(persian, latin)
+
+            if value and value not in ['-', '.']:
+                try:
+                    return float(value)
+                except:
+                    return 0
+            return 0
+
+        except:
+            return 0
 
 
     def calculate_ratios(self, data):
