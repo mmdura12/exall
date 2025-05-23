@@ -190,67 +190,124 @@ class FinancialAnalyzer:
             return 0
 
     def read_financial_data(self, file_path):
-        """خواندن داده‌های مالی از فایل اکسل"""
+        """خواندن داده‌های مالی از فایل اکسل با دقت بیشتر"""
         try:
-            df = pd.read_excel(file_path, header=None)
-            year = str(file_path).split('_')[0].split('\\')[-1]
+            # خواندن فایل با روش‌های مختلف برای اطمینان از خواندن صحیح داده‌ها
+            try:
+                df = pd.read_excel(file_path, header=None)
+                if df.empty:
+                    df = pd.read_excel(file_path, header=0)
+            except:
+                try:
+                    df = pd.read_excel(file_path, header=0)
+                except Exception as e:
+                    print(f"خطا در خواندن فایل {file_path}: {str(e)}")
+                    return None
+
+            # حذف ستون‌های خالی
+            df = df.dropna(axis=1, how='all')
+
+            # پر کردن مقادیر NaN با مقدار خالی
+            df = df.fillna('')
+
+            # استخراج سال از نام فایل
+            try:
+                year = str(file_path).split('_')[0].split('\\')[-1]
+            except:
+                year = str(file_path).split('/')[-1].split('_')[0]
 
             data = {'سال': year}
+
+            # جستجوی مقادیر با چند روش مختلف
             for metric, patterns in self.search_patterns.items():
+                found_value = False
+                max_value = 0
+
+                # روش اول: جستجوی مستقیم
                 value = self.find_value_in_df(df, patterns)
-                if value:
-                    data[metric] = value
-                    print(f"{metric}: {value:,.0f}")
+                if value > 0:
+                    max_value = value
+                    found_value = True
+
+                # روش دوم: جستجو در ترانسپوز dataframe
+                if not found_value:
+                    df_t = df.transpose()
+                    value = self.find_value_in_df(df_t, patterns)
+                    if value > 0:
+                        max_value = value
+                        found_value = True
+
+                # روش سوم: جستجو با تبدیل همه سلول‌ها به رشته
+                if not found_value:
+                    df_str = df.astype(str)
+                    value = self.find_value_in_df(df_str, patterns)
+                    if value > 0:
+                        max_value = value
+                        found_value = True
+
+                # ذخیره مقدار پیدا شده
+                data[metric] = max_value
+
+                # نمایش مقدار پیدا شده با فرمت مناسب
+                if max_value > 0:
+                    print(f"{metric}: {max_value:,.0f}")
+                else:
+                    print(f"{metric}: 0")
+
+            # اطمینان از وجود همه فیلدها
+            for metric in self.search_patterns.keys():
+                if metric not in data:
+                    data[metric] = 0
 
             return data
 
         except Exception as e:
-            print(f"خطا در خواندن فایل: {str(e)}")
+            print(f"خطا در خواندن فایل {file_path}: {str(e)}")
             return None
 
-        def calculate_ratios(self, data):  # تورفتگی درست شد
-            """محاسبه نسبت‌های مالی با دقت بالا"""
-            ratios = {}
-            try:
-                # نسبت‌های نقدینگی
-                if data.get('بدهی جاری', 0) > 0:
-                    # محاسبه نسبت جاری
-                    current_ratio = data.get('دارایی جاری', 0) / data.get('بدهی جاری', 0)
-                    if current_ratio != 0:
-                        ratios['نسبت جاری'] = round(current_ratio, 6)
+    def calculate_ratios(self, data):  # این متد باید در همان سطح متدهای دیگر باشد
+        """محاسبه نسبت‌های مالی با دقت بالا"""
+        ratios = {}
+        try:
+            # نسبت‌های نقدینگی
+            if data.get('بدهی جاری', 0) > 0:
+                # محاسبه نسبت جاری
+                current_ratio = data.get('دارایی جاری', 0) / data.get('بدهی جاری', 0)
+                if current_ratio != 0:
+                    ratios['نسبت جاری'] = round(current_ratio, 6)
 
-                    # محاسبه نسبت آنی
-                    quick_ratio = (data.get('دارایی جاری', 0) - data.get('موجودی کالا', 0)) / data.get('بدهی جاری', 0)
-                    if quick_ratio != 0:
-                        ratios['نسبت آنی'] = round(quick_ratio, 6)
+                # محاسبه نسبت آنی
+                quick_ratio = (data.get('دارایی جاری', 0) - data.get('موجودی کالا', 0)) / data.get('بدهی جاری', 0)
+                if quick_ratio != 0:
+                    ratios['نسبت آنی'] = round(quick_ratio, 6)
 
-                # نسبت‌های سودآوری
-                if data.get('فروش', 0) > 0:
-                    # حاشیه سود ناخالص
-                    if data.get('سود ناخالص', 0) != 0:
-                        gross_margin = (data.get('سود ناخالص', 0) / data.get('فروش', 0)) * 100
-                        ratios['حاشیه سود ناخالص'] = round(gross_margin, 6)
+            # نسبت‌های سودآوری
+            if data.get('فروش', 0) > 0:
+                # حاشیه سود ناخالص
+                if data.get('سود ناخالص', 0) != 0:
+                    gross_margin = (data.get('سود ناخالص', 0) / data.get('فروش', 0)) * 100
+                    ratios['حاشیه سود ناخالص'] = round(gross_margin, 6)
 
-                    # حاشیه سود عملیاتی
-                    if data.get('سود عملیاتی', 0) != 0:
-                        operating_margin = (data.get('سود عملیاتی', 0) / data.get('فروش', 0)) * 100
-                        ratios['حاشیه سود عملیاتی'] = round(operating_margin, 6)
+                # حاشیه سود عملیاتی
+                if data.get('سود عملیاتی', 0) != 0:
+                    operating_margin = (data.get('سود عملیاتی', 0) / data.get('فروش', 0)) * 100
+                    ratios['حاشیه سود عملیاتی'] = round(operating_margin, 6)
 
-                    # حاشیه سود خالص
-                    if data.get('سود خالص', 0) != 0:
-                        net_margin = (data.get('سود خالص', 0) / data.get('فروش', 0)) * 100
-                        ratios['حاشیه سود خالص'] = round(net_margin, 6)
+                # حاشیه سود خالص
+                if data.get('سود خالص', 0) != 0:
+                    net_margin = (data.get('سود خالص', 0) / data.get('فروش', 0)) * 100
+                    ratios['حاشیه سود خالص'] = round(net_margin, 6)
 
-                # نسبت بدهی
-                if data.get('کل دارایی ها', 0) > 0 and data.get('کل بدهی ها', 0) != 0:
-                    debt_ratio = (data.get('کل بدهی ها', 0) / data.get('کل دارایی ها', 0)) * 100
-                    ratios['نسبت بدهی'] = round(debt_ratio, 6)
+            # نسبت بدهی
+            if data.get('کل دارایی ها', 0) > 0 and data.get('کل بدهی ها', 0) != 0:
+                debt_ratio = (data.get('کل بدهی ها', 0) / data.get('کل دارایی ها', 0)) * 100
+                ratios['نسبت بدهی'] = round(debt_ratio, 6)
 
-                return ratios
+            return ratios
 
-            except Exception as e:
-                print(f"خطا در محاسبه نسبت‌ها: {str(e)}")
-                return {}
+        except Exception as e:
+            print(f"خطا در محاسبه نسبت‌ها: {str(e)}")
+            return {}
 
     def save_results(self, results, output_path):
         """ذخیره نتایج در اکسل با فرمت عمودی و شرکت‌ها در هدر"""
@@ -268,111 +325,87 @@ class FinancialAnalyzer:
                     'text_wrap': True
                 })
 
-                subheader_format = workbook.add_format({
-                    'bold': True,
-                    'align': 'center',
-                    'valign': 'vcenter',
-                    'bg_color': '#E6F1DC',
-                    'border': 1
-                })
-
                 number_format = workbook.add_format({
-                    'num_format': '#,##0',
+                    'num_format': '#,##0.000000',
                     'align': 'center',
                     'border': 1
                 })
-
-                ratio_format = workbook.add_format({
-                    'num_format': '0.000000',
-                    'align': 'center',
-                    'border': 1
-                })
-
-                # داده‌های مالی
-                financial_data = []
-                ratios_data = []
 
                 # تعریف متغیرها و نسبت‌ها
-                variables = [
-                    'دارایی جاری', 'کل دارایی ها', 'بدهی جاری', 'کل بدهی ها',
-                    'فروش', 'سود ناخالص', 'سود عملیاتی', 'سود خالص',
-                    'موجودی کالا', 'حساب های دریافتنی'
-                ]
-
                 ratios = [
-                    'نسبت جاری', 'نسبت آنی', 'حاشیه سود ناخالص',
-                    'حاشیه سود عملیاتی', 'حاشیه سود خالص', 'نسبت بدهی'
+                    'نسبت جاری',
+                    'نسبت آنی',
+                    'حاشیه سود ناخالص',
+                    'حاشیه سود عملیاتی',
+                    'حاشیه سود خالص',
+                    'نسبت بدهی'
                 ]
 
                 years = ['1398', '1399', '1400', '1401', '1402']
                 companies = sorted(results.keys())
 
-                # ایجاد دیتافریم برای داده‌های مالی
-                df_financial = pd.DataFrame(index=variables)
-                df_ratios = pd.DataFrame(index=ratios)
+                # ایجاد شیت نسبت‌های مالی
+                worksheet = workbook.add_worksheet('نسبت‌های مالی')
 
+                # تنظیم عرض ستون‌ها
+                worksheet.set_column(0, 0, 25)  # ستون شاخص
+                worksheet.set_column(1, 30, 15)  # ستون‌های داده
+
+                # نوشتن هدر شرکت‌ها
+                current_col = 1
                 for company in companies:
-                    company_data = {}
-                    company_ratios = {}
+                    # ادغام سلول‌ها برای نام شرکت
+                    worksheet.merge_range(0, current_col, 0, current_col + 4, company, header_format)
 
-                    for year in years:
+                    # نوشتن سال‌ها
+                    for i, year in enumerate(years):
+                        worksheet.write(1, current_col + i, year, header_format)
+
+                    current_col += 5
+
+                # نوشتن نام نسبت‌ها
+                for i, ratio in enumerate(ratios):
+                    worksheet.write(i + 2, 0, ratio, header_format)
+
+                # نوشتن داده‌ها
+                current_col = 1
+                for company in companies:
+                    for year_idx, year in enumerate(years):
                         if year in results[company]:
-                            data = results[company][year]
-                            col_name = f"{company} {year}"
+                            ratios_data = results[company][year].get('نسبت‌ها', {})
+                            for ratio_idx, ratio in enumerate(ratios):
+                                value = ratios_data.get(ratio, 0)
+                                worksheet.write_number(ratio_idx + 2, current_col + year_idx, value, number_format)
+                        else:
+                            # اگر داده برای این سال وجود ندارد، صفر بنویس
+                            for ratio_idx in range(len(ratios)):
+                                worksheet.write_number(ratio_idx + 2, current_col + year_idx, 0, number_format)
 
-                            # داده‌های مالی
-                            company_data[col_name] = [data['متغیرها'].get(var, 0) for var in variables]
+                    current_col += 5
 
-                            # نسبت‌های مالی
-                            company_ratios[col_name] = [data['نسبت‌ها'].get(ratio, 0) for ratio in ratios]
-
-                    # اضافه کردن داده‌ها به دیتافریم‌ها
-                    df_temp = pd.DataFrame(company_data, index=variables)
-                    df_financial = pd.concat([df_financial, df_temp], axis=1)
-
-                    df_temp = pd.DataFrame(company_ratios, index=ratios)
-                    df_ratios = pd.concat([df_ratios, df_temp], axis=1)
-
-                # نوشتن داده‌های مالی
-                df_financial.to_excel(writer, sheet_name='داده‌های مالی')
-                worksheet1 = writer.sheets['داده‌های مالی']
-
-                # نوشتن نسبت‌های مالی
-                df_ratios.to_excel(writer, sheet_name='نسبت‌های مالی')
-                worksheet2 = writer.sheets['نسبت‌های مالی']
-
-                # تنظیم فرمت‌بندی برای هر دو شیت
-                for ws, df, fmt in [(worksheet1, df_financial, number_format),
-                                    (worksheet2, df_ratios, ratio_format)]:
-
-                    # تنظیم عرض ستون‌ها
-                    ws.set_column(0, 0, 20)  # ستون شاخص
-                    ws.set_column(1, len(df.columns), 15)  # ستون‌های داده
-
-                    # نوشتن هدر شرکت‌ها
-                    for col, company in enumerate(companies):
-                        ws.merge_range(0, col * 5 + 1, 0, col * 5 + 5, company, header_format)
-                        for year_idx, year in enumerate(years):
-                            ws.write(1, col * 5 + 1 + year_idx, year, subheader_format)
-
-                    # نوشتن نام شاخص‌ها
-                    for row, index in enumerate(df.index):
-                        ws.write(row + 2, 0, index, header_format)
-
-                    # نوشتن داده‌ها
-                    for row in range(len(df.index)):
-                        for col in range(len(df.columns)):
-                            ws.write(row + 2, col + 1, df.iloc[row, col], fmt)
-
-                    # تنظیم فریز پنل
-                    ws.freeze_panes(2, 1)
+                # تنظیم فریز پنل
+                worksheet.freeze_panes(2, 1)
 
                 print(f"\nنتایج با موفقیت در فایل زیر ذخیره شد:\n{output_path}")
+
+                # چاپ مقادیر برای اطمینان از صحت داده‌ها
+                print("\nمقادیر ذخیره شده:")
+                for company in companies:
+                    print(f"\nشرکت {company}:")
+                    for year in years:
+                        if year in results[company]:
+                            ratios_data = results[company][year].get('نسبت‌ها', {})
+                            print(f"\nسال {year}:")
+                            for ratio in ratios:
+                                value = ratios_data.get(ratio, 0)
+                                print(f"{ratio}: {value:.6f}")
+
                 return True
 
         except Exception as e:
             print(f"خطا در ذخیره نتایج: {str(e)}")
             return False
+
 def main():
     print("\n=== سیستم تحلیل مالی ===")
     print(f"زمان اجرا: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
