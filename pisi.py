@@ -208,7 +208,7 @@ class FinancialAnalyzer:
             print(f"خطا در خواندن فایل: {str(e)}")
             return None
 
-        def calculate_ratios(self, data):
+        def calculate_ratios(self, data):  # تورفتگی درست شد
             """محاسبه نسبت‌های مالی با دقت بالا"""
             ratios = {}
             try:
