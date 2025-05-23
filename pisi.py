@@ -120,173 +120,173 @@ class FinancialAnalyzer:
             return 0
 
     def find_value_in_df(self, df, keywords):
-        """جستجوی دقیق‌تر مقدار در دیتافریم با کنترل کیفیت داده‌ها"""
+        """جستجوی مقادیر در دیتافریم با دقت بیشتر"""
         try:
             def normalize_text(text):
-                """نرمال‌سازی پیشرفته متن فارسی با کنترل بیشتر"""
+                """نرمال‌سازی متن فارسی"""
                 text = str(text).strip()
-                replacements = {
-                    '‌': ' ',  # حذف نیم‌فاصله
-                    'ي': 'ی',  # یکسان‌سازی ی
-                    'ك': 'ک',  # یکسان‌سازی ک
-                    '\u200c': ' ',  # حذف نیم‌فاصله یونیکد
-                    '\n': ' ',  # حذف خط جدید
-                    '\r': ' ',  # حذف کریج ریترن
-                    '\t': ' ',  # حذف تب
-                    '  ': ' ',  # حذف فاصله‌های اضافی
-                    '،': ' ',  # تبدیل کاما فارسی
-                    '؛': ' ',  # تبدیل نقطه‌ویرگول فارسی
+                persians = {
+                    '‌': ' ', 'ي': 'ی', 'ك': 'ک', '\u200c': ' ',
+                    '،': ' ', '؛': ' ', '\n': ' ', '\r': ' ', '\t': ' ',
                     '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
                     '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
                 }
-                for old, new in replacements.items():
+                for old, new in persians.items():
                     text = text.replace(old, new)
                 return ' '.join(text.split())
 
-            def validate_value(value, metric_name=""):
-                """اعتبارسنجی مقدار عددی"""
-                try:
-                    val = float(value)
-                    if val <= 0:
-                        return None
-                    if val > 1e12:  # مقادیر خیلی بزرگ
-                        print(f"هشدار: مقدار خیلی بزرگ برای {metric_name}: {val:,.0f}")
-                        return None
-                    return val
-                except (ValueError, TypeError):
-                    return None
+            def find_number_in_row(row, col_idx, keyword):
+                """یافتن عدد معتبر در سطر"""
+                # الگوی جستجو در ستون‌های مجاور
+                check_order = [
+                    1,  # ستون بعدی
+                    2,  # دو ستون بعد
+                    -1,  # ستون قبلی
+                    0,  # ستون فعلی
+                    3,  # سه ستون بعد
+                    -2,  # دو ستون قبل
+                    4  # چهار ستون بعد
+                ]
 
-            # پاکسازی و آماده‌سازی دیتافریم
+                found_values = []
+                for offset in check_order:
+                    target_idx = col_idx + offset
+                    if 0 <= target_idx < len(row):
+                        value = self.clean_number(row[target_idx])
+                        if value > 0 and value < 1e12:  # محدوده معقول
+                            found_values.append({
+                                'value': value,
+                                'distance': abs(offset),
+                                'position': target_idx
+                            })
+
+                if found_values:
+                    # اولویت با نزدیک‌ترین مقدار معتبر
+                    found_values.sort(key=lambda x: (x['distance'], -x['value']))
+                    return found_values[0]['value']
+                return None
+
+            # آماده‌سازی دیتافریم
             df = df.fillna('')
             df = df.replace('[\$,)]', '', regex=True)
             df = df.replace('[(]', '-', regex=True)
             df = df.astype(str)
 
-            found_values = []
-            value_sources = {}  # برای ردیابی منبع هر مقدار
+            best_value = None
+            best_location = None
+            keyword_matches = []
 
+            # جستجو برای هر کلیدواژه
             for keyword in keywords:
                 normalized_keyword = normalize_text(keyword)
-                print(f"\nجستجو برای کلیدواژه: {keyword}")
 
+                # بررسی هر سطر
                 for idx, row in df.iterrows():
-                    row_values = []
-
                     for col in df.columns:
-                        try:
-                            cell_value = normalize_text(row[col])
+                        cell_value = normalize_text(row[col])
 
-                            if normalized_keyword in cell_value:
-                                col_idx = df.columns.get_loc(col)
-                                cell_location = f"سطر {idx + 1}, ستون {col}"
+                        # اگر کلیدواژه در سلول پیدا شد
+                        if normalized_keyword in cell_value:
+                            col_idx = df.columns.get_loc(col)
+                            value = find_number_in_row(row, col_idx, keyword)
 
-                                # بررسی ستون‌های مجاور با الگوریتم بهبود یافته
-                                search_ranges = [
-                                    # (شروع نسبت به ستون فعلی, پایان, اولویت)
-                                    (1, 6, 3),  # ستون‌های بعدی با اولویت بالا
-                                    (-3, 0, 2),  # ستون‌های قبلی با اولویت متوسط
-                                    (0, 1, 1),  # ستون فعلی با اولویت پایین
-                                ]
+                            if value is not None:
+                                keyword_matches.append({
+                                    'value': value,
+                                    'location': f"سطر {idx + 1}, ستون {col}",
+                                    'keyword': keyword
+                                })
 
-                                for start, end, priority in search_ranges:
-                                    for i in range(start, end):
-                                        target_idx = col_idx + i
-                                        if 0 <= target_idx < len(df.columns):
-                                            val = self.clean_number(row[df.columns[target_idx]])
-                                            if val > 0:
-                                                val_validated = validate_value(val, keyword)
-                                                if val_validated:
-                                                    row_values.append(val_validated)
-                                                    value_sources[val_validated] = {
-                                                        'location': cell_location,
-                                                        'priority': priority,
-                                                        'value': f"{val_validated:,.0f}"
-                                                    }
+            if keyword_matches:
+                # حذف مقادیر تکراری
+                unique_values = []
+                seen = set()
+                for match in keyword_matches:
+                    if match['value'] not in seen:
+                        unique_values.append(match)
+                        seen.add(match['value'])
 
-                        except Exception as e:
-                            print(f"خطا در پردازش سلول: {str(e)}")
-                            continue
+                if len(unique_values) == 1:
+                    best_match = unique_values[0]
+                    print(f"\nمقدار یافت شده برای '{best_match['keyword']}': "
+                          f"{best_match['value']:,.0f} در {best_match['location']}")
+                    return best_match['value']
 
-                    # اضافه کردن مقادیر معتبر به لیست نهایی
-                    if row_values:
-                        row_values = list(set(row_values))  # حذف تکرار
-                        found_values.extend(row_values)
+                elif len(unique_values) > 1:
+                    # مرتب‌سازی بر اساس مقدار
+                    values = [match['value'] for match in unique_values]
+                    values.sort()
 
-            # پردازش و انتخاب مقدار نهایی
-            if found_values:
-                print(f"\nتعداد مقادیر یافت شده: {len(found_values)}")
-
-                # حذف مقادیر پرت
-                found_values = sorted(found_values)
-
-                if len(found_values) > 4:
-                    q1 = np.percentile(found_values, 25)
-                    q3 = np.percentile(found_values, 75)
-                    iqr = q3 - q1
-                    lower_bound = q1 - (1.5 * iqr)
-                    upper_bound = q3 + (1.5 * iqr)
-                    valid_values = [x for x in found_values if lower_bound <= x <= upper_bound]
-
-                    print(f"مقادیر معتبر پس از حذف مقادیر پرت: {len(valid_values)}")
-                    for val in valid_values:
-                        source = value_sources.get(val, {})
-                        print(f"مقدار: {source.get('value', val):>15} | محل: {source.get('location', 'نامشخص')}")
-                else:
-                    valid_values = found_values
-                    print("تعداد مقادیر کم است، همه مقادیر حفظ می‌شوند")
-
-                if valid_values:
-                    if len(valid_values) > 1:
-                        max_val = max(valid_values)
-                        median_val = np.median(valid_values)
-                        ratio = max_val / min(valid_values)
-
-                        if ratio > 1000:
-                            print(f"پراکندگی زیاد در داده‌ها (نسبت {ratio:.2f})، استفاده از میانه")
-                            return median_val
-                        else:
-                            print(f"پراکندگی معقول در داده‌ها (نسبت {ratio:.2f})، استفاده از مقدار حداکثر")
-                            return max_val
+                    # بررسی پراکندگی مقادیر
+                    if len(values) >= 3:
+                        # حذف مقادیر پرت با IQR
+                        q1 = np.percentile(values, 25)
+                        q3 = np.percentile(values, 75)
+                        iqr = q3 - q1
+                        lower_bound = q1 - (1.5 * iqr)
+                        upper_bound = q3 + (1.5 * iqr)
+                        filtered_values = [v for v in values if lower_bound <= v <= upper_bound]
                     else:
-                        print("تنها یک مقدار معتبر یافت شد")
-                        return valid_values[0]
+                        filtered_values = values
+
+                    if filtered_values:
+                        # انتخاب مقدار مناسب
+                        max_value = max(filtered_values)
+                        min_value = min(filtered_values)
+                        ratio = max_value / min_value if min_value > 0 else float('inf')
+
+                        if ratio > 10:  # اختلاف زیاد
+                            selected_value = np.median(filtered_values)
+                            print(f"\nاستفاده از میانه به دلیل پراکندگی زیاد (نسبت: {ratio:.2f})")
+                        else:
+                            selected_value = max_value
+                            print(f"\nاستفاده از مقدار حداکثر (نسبت: {ratio:.2f})")
+
+                        # نمایش مقدار انتخاب شده
+                        matching_location = next(
+                            match['location'] for match in unique_values
+                            if match['value'] == selected_value
+                        )
+                        print(f"مقدار نهایی: {selected_value:,.0f} در {matching_location}")
+                        return selected_value
 
             print("هیچ مقدار معتبری یافت نشد")
-            return None
+            return 0
 
         except Exception as e:
-            print(f"خطای کلی در جستجوی مقدار: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            return None
+            print(f"خطا در جستجوی مقدار: {str(e)}")
+            return 0
 
     def clean_number(self, value):
-        """تمیز کردن و تبدیل مقادیر عددی با دقت بیشتر"""
+        """تبدیل مقادیر به عدد با دقت بالا"""
         try:
             if isinstance(value, (int, float)):
                 return float(value)
 
-            if not value or value.isspace():
-                return 0
-
-            # حذف کاراکترهای خاص
+            # تبدیل به رشته و پاکسازی
             value = str(value).strip()
-            value = value.replace(',', '').replace('٬', '')
-            value = value.replace('(', '-').replace(')', '')
-            value = value.replace('−', '-').replace('–', '-')
-            value = value.replace('/', '').replace('\\', '')
 
-            # حذف همه کاراکترها به جز اعداد، نقطه و منفی
+            # حذف کاراکترهای اضافی
+            value = value.replace(',', '')
+            value = value.replace('٬', '')
+            value = value.replace('(', '-')
+            value = value.replace(')', '')
+
+            # تبدیل اعداد فارسی
+            persian_nums = {'۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+                            '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'}
+            for persian, latin in persian_nums.items():
+                value = value.replace(persian, latin)
+
+            # حذف همه کاراکترها به جز اعداد و علائم خاص
             value = ''.join(c for c in value if c.isdigit() or c in '.-')
 
             if value and value not in ['-', '.']:
-                num = float(value)
-                if abs(num) < 1e-10:  # حذف مقادیر خیلی کوچک
-                    return 0
-                return num
+                return float(value)
             return 0
 
         except:
+
             return 0
 
     def read_financial_data(self, file_path):
@@ -386,66 +386,58 @@ class FinancialAnalyzer:
             return None
 
     def calculate_ratios(self, data):
-        """محاسبه نسبت‌های مالی با دقت بالا و کنترل خطا"""
-        ratios = {}
+        """محاسبه نسبت‌های مالی با دقت بالا"""
         try:
-            def safe_divide(numerator, denominator, multiplier=1, metric_name=""):
-                """محاسبه نسبت با کنترل خطا و اعتبارسنجی"""
+            def safe_divide(num, denom, multiplier=1, metric_name=""):
+                """محاسبه نسبت با کنترل دقیق خطا"""
                 try:
-                    num = float(numerator)
-                    den = float(denominator)
-
-                    if den == 0:
-                        print(f"هشدار: مخرج صفر در محاسبه {metric_name}")
+                    if not isinstance(num, (int, float)) or not isinstance(denom, (int, float)):
+                        print(f"خطا در {metric_name}: مقادیر ورودی باید عددی باشند")
                         return None
 
-                    ratio = (num / den) * multiplier
-
-                    # حذف مقادیر غیرمنطقی
-                    if abs(ratio) < 0.000001:  # خیلی کوچک
-                        print(f"هشدار: مقدار محاسبه شده برای {metric_name} خیلی کوچک است")
+                    if denom == 0:
+                        print(f"خطا در {metric_name}: مخرج صفر است")
                         return None
-                    if abs(ratio) > 1000000:  # خیلی بزرگ
-                        print(f"هشدار: مقدار محاسبه شده برای {metric_name} خیلی بزرگ است")
+
+                    ratio = (float(num) / float(denom)) * multiplier
+
+                    # کنترل محدوده منطقی
+                    if abs(ratio) < 0.000001:
+                        print(f"هشدار در {metric_name}: مقدار محاسبه شده بسیار کوچک است")
+                        return None
+                    if abs(ratio) > 1000:
+                        print(f"هشدار در {metric_name}: مقدار محاسبه شده بسیار بزرگ است")
                         return None
 
                     return round(ratio, 6)
-                except (TypeError, ValueError, ZeroDivisionError) as e:
+                except Exception as e:
                     print(f"خطا در محاسبه {metric_name}: {str(e)}")
                     return None
 
-            # بررسی و تبدیل داده‌های ورودی
-            financial_metrics = {
-                'دارایی جاری': 'current_assets',
-                'کل دارایی ها': 'total_assets',
-                'بدهی جاری': 'current_liab',
-                'کل بدهی ها': 'total_liab',
-                'فروش': 'sales',
-                'سود ناخالص': 'gross_profit',
-                'سود عملیاتی': 'operating_profit',
-                'سود خالص': 'net_profit',
-                'موجودی کالا': 'inventory'
+            # تبدیل داده‌های ورودی
+            metrics = {
+                'current_assets': float(data.get('دارایی جاری', 0)),
+                'total_assets': float(data.get('کل دارایی ها', 0)),
+                'current_liab': float(data.get('بدهی جاری', 0)),
+                'total_liab': float(data.get('کل بدهی ها', 0)),
+                'inventory': float(data.get('موجودی کالا', 0)),
+                'sales': float(data.get('فروش', 0)),
+                'gross_profit': float(data.get('سود ناخالص', 0)),
+                'operating_profit': float(data.get('سود عملیاتی', 0)),
+                'net_profit': float(data.get('سود خالص', 0))
             }
 
-            # تبدیل و اعتبارسنجی داده‌ها
-            metrics = {}
-            print("\nمقادیر ورودی برای محاسبات:")
-            for fa_name, en_name in financial_metrics.items():
-                value = data.get(fa_name, 0)
-                try:
-                    value = float(value)
-                    if value < 0:
-                        print(f"هشدار: مقدار منفی برای {fa_name}: {value:,.0f}")
-                    metrics[en_name] = value
-                    print(f"{fa_name}: {value:,.0f}")
-                except (TypeError, ValueError) as e:
-                    print(f"خطا در تبدیل {fa_name}: {str(e)}")
-                    metrics[en_name] = 0
+            # نمایش مقادیر ورودی
+            print("\n=== مقادیر ورودی ===")
+            for name, value in metrics.items():
+                print(f"{name}: {value:,.0f}")
 
-            print("\nمحاسبه نسبت‌های مالی:")
+            ratios = {}
 
-            # محاسبه نسبت جاری
+            # محاسبه نسبت‌های نقدینگی
+            print("\n=== محاسبه نسبت‌های نقدینگی ===")
             if metrics['current_liab'] > 0:
+                # نسبت جاری
                 current_ratio = safe_divide(
                     metrics['current_assets'],
                     metrics['current_liab'],
@@ -455,11 +447,16 @@ class FinancialAnalyzer:
                 if current_ratio is not None:
                     ratios['نسبت جاری'] = current_ratio
                     print(f"نسبت جاری: {current_ratio:.6f}")
+                    # تحلیل نسبت جاری
+                    if current_ratio < 1:
+                        print("هشدار: نسبت جاری کمتر از 1 است - نشان‌دهنده مشکل در نقدینگی")
+                    elif current_ratio > 3:
+                        print("هشدار: نسبت جاری بیش از حد بالاست - احتمال عدم استفاده بهینه از دارایی‌ها")
 
-            # محاسبه نسبت آنی
-            if metrics['current_liab'] > 0:
+                # نسبت آنی
+                quick_assets = metrics['current_assets'] - metrics['inventory']
                 quick_ratio = safe_divide(
-                    metrics['current_assets'] - metrics['inventory'],
+                    quick_assets,
                     metrics['current_liab'],
                     1,
                     "نسبت آنی"
@@ -467,46 +464,53 @@ class FinancialAnalyzer:
                 if quick_ratio is not None:
                     ratios['نسبت آنی'] = quick_ratio
                     print(f"نسبت آنی: {quick_ratio:.6f}")
+                    # تحلیل نسبت آنی
+                    if quick_ratio < 0.5:
+                        print("هشدار: نسبت آنی پایین است - ممکن است نشان‌دهنده مشکل نقدینگی باشد")
 
             # محاسبه نسبت‌های سودآوری
+            print("\n=== محاسبه نسبت‌های سودآوری ===")
             if metrics['sales'] > 0:
                 # حاشیه سود ناخالص
-                if metrics['gross_profit'] != 0:
-                    gross_margin = safe_divide(
-                        metrics['gross_profit'],
-                        metrics['sales'],
-                        100,
-                        "حاشیه سود ناخالص"
-                    )
-                    if gross_margin is not None:
-                        ratios['حاشیه سود ناخالص'] = gross_margin
-                        print(f"حاشیه سود ناخالص: {gross_margin:.6f}%")
+                gross_margin = safe_divide(
+                    metrics['gross_profit'],
+                    metrics['sales'],
+                    100,
+                    "حاشیه سود ناخالص"
+                )
+                if gross_margin is not None:
+                    ratios['حاشیه سود ناخالص'] = gross_margin
+                    print(f"حاشیه سود ناخالص: {gross_margin:.6f}%")
 
                 # حاشیه سود عملیاتی
-                if metrics['operating_profit'] != 0:
-                    operating_margin = safe_divide(
-                        metrics['operating_profit'],
-                        metrics['sales'],
-                        100,
-                        "حاشیه سود عملیاتی"
-                    )
-                    if operating_margin is not None:
-                        ratios['حاشیه سود عملیاتی'] = operating_margin
-                        print(f"حاشیه سود عملیاتی: {operating_margin:.6f}%")
+                operating_margin = safe_divide(
+                    metrics['operating_profit'],
+                    metrics['sales'],
+                    100,
+                    "حاشیه سود عملیاتی"
+                )
+                if operating_margin is not None:
+                    ratios['حاشیه سود عملیاتی'] = operating_margin
+                    print(f"حاشیه سود عملیاتی: {operating_margin:.6f}%")
 
                 # حاشیه سود خالص
-                if metrics['net_profit'] != 0:
-                    net_margin = safe_divide(
-                        metrics['net_profit'],
-                        metrics['sales'],
-                        100,
-                        "حاشیه سود خالص"
-                    )
-                    if net_margin is not None:
-                        ratios['حاشیه سود خالص'] = net_margin
-                        print(f"حاشیه سود خالص: {net_margin:.6f}%")
+                net_margin = safe_divide(
+                    metrics['net_profit'],
+                    metrics['sales'],
+                    100,
+                    "حاشیه سود خالص"
+                )
+                if net_margin is not None:
+                    ratios['حاشیه سود خالص'] = net_margin
+                    print(f"حاشیه سود خالص: {net_margin:.6f}%")
+                    # تحلیل حاشیه سود
+                    if net_margin < 0:
+                        print("هشدار: حاشیه سود خالص منفی است")
+                    elif net_margin > 50:
+                        print("توجه: حاشیه سود خالص بسیار بالاست")
 
-            # محاسبه نسبت بدهی
+            # محاسبه نسبت‌های اهرمی
+            print("\n=== محاسبه نسبت‌های اهرمی ===")
             if metrics['total_assets'] > 0:
                 debt_ratio = safe_divide(
                     metrics['total_liab'],
@@ -517,11 +521,17 @@ class FinancialAnalyzer:
                 if debt_ratio is not None:
                     ratios['نسبت بدهی'] = debt_ratio
                     print(f"نسبت بدهی: {debt_ratio:.6f}%")
+                    # تحلیل نسبت بدهی
+                    if debt_ratio > 70:
+                        print("هشدار: نسبت بدهی بالاست - ریسک مالی زیاد")
 
             # خلاصه نتایج
-            print(f"\nتعداد نسبت‌های محاسبه شده: {len(ratios)}")
-            if not ratios:
+            print(f"\n=== خلاصه نتایج ===")
+            print(f"تعداد نسبت‌های محاسبه شده: {len(ratios)}")
+            if len(ratios) == 0:
                 print("هشدار: هیچ نسبتی محاسبه نشد!")
+            elif len(ratios) < 4:
+                print("هشدار: تعداد نسبت‌های محاسبه شده کمتر از حد انتظار است")
 
             return ratios
 
@@ -529,9 +539,6 @@ class FinancialAnalyzer:
             print(f"\nخطای کلی در محاسبه نسبت‌ها: {str(e)}")
             import traceback
             print(traceback.format_exc())
-            print("\nداده‌های ورودی:")
-            for key, value in data.items():
-                print(f"{key}: {value}")
             return {}
 
     def save_results(self, results, output_path):
