@@ -120,73 +120,137 @@ class FinancialAnalyzer:
             return 0
 
     def find_value_in_df(self, df, keywords):
-        """جستجوی دقیق‌تر مقدار در دیتافریم"""
+        """جستجوی دقیق‌تر مقدار در دیتافریم با حذف مقادیر صفر"""
         try:
-            # نرمال‌سازی کلمات کلیدی
             def normalize_text(text):
-                """نرمال‌سازی متن فارسی"""
+                """نرمال‌سازی پیشرفته متن فارسی"""
                 text = str(text).strip()
-                text = text.replace('‌', ' ')  # حذف نیم‌فاصله
-                text = text.replace('ي', 'ی')  # یکسان‌سازی ی
-                text = text.replace('ك', 'ک')  # یکسان‌سازی ک
-                return ' '.join(text.split())  # حذف فاصله‌های اضافی
+                replacements = {
+                    '‌': ' ',  # حذف نیم‌فاصله
+                    'ي': 'ی',  # یکسان‌سازی ی
+                    'ك': 'ک',  # یکسان‌سازی ک
+                    '\u200c': ' ',  # حذف نیم‌فاصله یونیکد
+                    '\n': ' ',  # حذف خط جدید
+                    '\r': ' ',  # حذف کریج ریترن
+                    '\t': ' ',  # حذف تب
+                    '  ': ' ',  # حذف فاصله‌های اضافی
+                }
+                for old, new in replacements.items():
+                    text = text.replace(old, new)
+                return ' '.join(text.split())
 
-            # تبدیل DataFrame به string برای جستجوی بهتر
+            # پاکسازی و آماده‌سازی دیتافریم
             df = df.fillna('')
+            df = df.replace('[\$,)]', '', regex=True)
+            df = df.replace('[(]', '-', regex=True)
             df = df.astype(str)
+
+            found_values = []  # لیست همه مقادیر یافت شده
 
             for keyword in keywords:
                 normalized_keyword = normalize_text(keyword)
 
                 for idx, row in df.iterrows():
-                    row_found = False
+                    row_values = []  # مقادیر یافت شده در یک سطر
 
                     # بررسی هر سلول در سطر
                     for col in df.columns:
                         try:
                             cell_value = normalize_text(row[col])
 
-                            # اگر کلمه کلیدی در سلول پیدا شد
                             if normalized_keyword in cell_value:
-                                row_found = True
                                 col_idx = df.columns.get_loc(col)
 
-                                # جستجو در ستون‌های بعدی (تا 5 ستون)
+                                # بررسی ستون‌های مجاور
+                                nearby_values = []
+
+                                # بررسی ستون‌های بعدی (تا 5 ستون)
                                 for i in range(1, 6):
                                     if col_idx + i < len(df.columns):
-                                        next_col = df.columns[col_idx + i]
-                                        value = self.clean_number(row[next_col])
-                                        if value != 0:
-                                            return value
+                                        val = self.clean_number(row[df.columns[col_idx + i]])
+                                        if val > 0:  # فقط مقادیر مثبت
+                                            nearby_values.append(val)
 
-                                # جستجو در ستون‌های قبلی (تا 3 ستون)
+                                # بررسی ستون‌های قبلی (تا 3 ستون)
                                 for i in range(1, 4):
                                     if col_idx - i >= 0:
-                                        prev_col = df.columns[col_idx - i]
-                                        value = self.clean_number(row[prev_col])
-                                        if value != 0:
-                                            return value
+                                        val = self.clean_number(row[df.columns[col_idx - i]])
+                                        if val > 0:  # فقط مقادیر مثبت
+                                            nearby_values.append(val)
 
-                                # جستجو در همان ستون
-                                value = self.clean_number(row[col])
-                                if value != 0:
-                                    return value
+                                # بررسی ستون فعلی
+                                val = self.clean_number(row[col])
+                                if val > 0:
+                                    nearby_values.append(val)
+
+                                if nearby_values:
+                                    row_values.extend(nearby_values)
 
                         except Exception as e:
-                            continue  # ادامه جستجو در صورت بروز خطا
+                            continue
 
-                    # اگر کلمه کلیدی در سطر پیدا شد اما مقداری یافت نشد
-                    if row_found:
-                        # جستجوی عدد در کل سطر
-                        for cell in row:
-                            value = self.clean_number(cell)
-                            if value != 0:
-                                return value
+                    # اضافه کردن مقادیر معتبر به لیست نهایی
+                    if row_values:
+                        # حذف مقادیر تکراری
+                        row_values = list(set(row_values))
+                        found_values.extend(row_values)
 
-            return 0  # اگر هیچ مقداری پیدا نشد
+            # انتخاب مقدار نهایی
+            if found_values:
+                # حذف مقادیر پرت
+                found_values = sorted(found_values)  # مرتب‌سازی مقادیر
+                if len(found_values) > 4:  # اگر بیش از 4 مقدار یافت شد
+                    q1 = np.percentile(found_values, 25)
+                    q3 = np.percentile(found_values, 75)
+                    iqr = q3 - q1
+                    lower_bound = q1 - (1.5 * iqr)
+                    upper_bound = q3 + (1.5 * iqr)
+                    valid_values = [x for x in found_values if lower_bound <= x <= upper_bound]
+                else:
+                    valid_values = found_values
+
+                if valid_values:
+                    # بررسی پراکندگی مقادیر
+                    if max(valid_values) / min(valid_values) > 1000:
+                        # اگر اختلاف زیاد است، میانه را برگردان
+                        return np.median(valid_values)
+                    else:
+                        # در غیر این صورت، بیشترین مقدار را برگردان
+                        return max(valid_values)
+
+            return None  # اگر هیچ مقدار معتبری پیدا نشد
 
         except Exception as e:
             print(f"خطا در جستجوی مقدار: {str(e)}")
+            return None
+
+    def clean_number(self, value):
+        """تمیز کردن و تبدیل مقادیر عددی با دقت بیشتر"""
+        try:
+            if isinstance(value, (int, float)):
+                return float(value)
+
+            if not value or value.isspace():
+                return 0
+
+            # حذف کاراکترهای خاص
+            value = str(value).strip()
+            value = value.replace(',', '').replace('٬', '')
+            value = value.replace('(', '-').replace(')', '')
+            value = value.replace('−', '-').replace('–', '-')
+            value = value.replace('/', '').replace('\\', '')
+
+            # حذف همه کاراکترها به جز اعداد، نقطه و منفی
+            value = ''.join(c for c in value if c.isdigit() or c in '.-')
+
+            if value and value not in ['-', '.']:
+                num = float(value)
+                if abs(num) < 1e-10:  # حذف مقادیر خیلی کوچک
+                    return 0
+                return num
+            return 0
+
+        except:
             return 0
 
     def read_financial_data(self, file_path):
@@ -265,48 +329,79 @@ class FinancialAnalyzer:
             print(f"خطا در خواندن فایل {file_path}: {str(e)}")
             return None
 
-    def calculate_ratios(self, data):  # این متد باید در همان سطح متدهای دیگر باشد
+    def calculate_ratios(self, data):
         """محاسبه نسبت‌های مالی با دقت بالا"""
         ratios = {}
         try:
-            # نسبت‌های نقدینگی
-            if data.get('بدهی جاری', 0) > 0:
-                # محاسبه نسبت جاری
-                current_ratio = data.get('دارایی جاری', 0) / data.get('بدهی جاری', 0)
-                if current_ratio != 0:
-                    ratios['نسبت جاری'] = round(current_ratio, 6)
+            # تابع کمکی برای محاسبه نسبت‌های مالی با کنترل خطا
+            def safe_divide(numerator, denominator, multiplier=1):
+                try:
+                    if denominator and isinstance(denominator, (int, float)) and denominator != 0:
+                        ratio = (float(numerator) / float(denominator)) * multiplier
+                        if abs(ratio) > 0.000001:  # حذف مقادیر بسیار کوچک
+                            return round(ratio, 6)
+                except (TypeError, ValueError, ZeroDivisionError):
+                    pass
+                return None
 
-                # محاسبه نسبت آنی
-                quick_ratio = (data.get('دارایی جاری', 0) - data.get('موجودی کالا', 0)) / data.get('بدهی جاری', 0)
-                if quick_ratio != 0:
-                    ratios['نسبت آنی'] = round(quick_ratio, 6)
+            # دریافت مقادیر پایه با مقدار پیش‌فرض صفر
+            current_assets = float(data.get('دارایی جاری', 0))
+            current_liab = float(data.get('بدهی جاری', 0))
+            inventory = float(data.get('موجودی کالا', 0))
+            sales = float(data.get('فروش', 0))
+            gross_profit = float(data.get('سود ناخالص', 0))
+            operating_profit = float(data.get('سود عملیاتی', 0))
+            net_profit = float(data.get('سود خالص', 0))
+            total_assets = float(data.get('کل دارایی ها', 0))
+            total_liab = float(data.get('کل بدهی ها', 0))
 
-            # نسبت‌های سودآوری
-            if data.get('فروش', 0) > 0:
+            # محاسبه نسبت‌های نقدینگی
+            if current_liab > 0:
+                # نسبت جاری
+                current_ratio = safe_divide(current_assets, current_liab)
+                if current_ratio is not None:
+                    ratios['نسبت جاری'] = current_ratio
+
+                # نسبت آنی
+                quick_ratio = safe_divide(current_assets - inventory, current_liab)
+                if quick_ratio is not None:
+                    ratios['نسبت آنی'] = quick_ratio
+
+            # محاسبه نسبت‌های سودآوری
+            if sales > 0:
                 # حاشیه سود ناخالص
-                if data.get('سود ناخالص', 0) != 0:
-                    gross_margin = (data.get('سود ناخالص', 0) / data.get('فروش', 0)) * 100
-                    ratios['حاشیه سود ناخالص'] = round(gross_margin, 6)
+                if gross_profit != 0:
+                    gross_margin = safe_divide(gross_profit, sales, 100)
+                    if gross_margin is not None:
+                        ratios['حاشیه سود ناخالص'] = gross_margin
 
                 # حاشیه سود عملیاتی
-                if data.get('سود عملیاتی', 0) != 0:
-                    operating_margin = (data.get('سود عملیاتی', 0) / data.get('فروش', 0)) * 100
-                    ratios['حاشیه سود عملیاتی'] = round(operating_margin, 6)
+                if operating_profit != 0:
+                    operating_margin = safe_divide(operating_profit, sales, 100)
+                    if operating_margin is not None:
+                        ratios['حاشیه سود عملیاتی'] = operating_margin
 
                 # حاشیه سود خالص
-                if data.get('سود خالص', 0) != 0:
-                    net_margin = (data.get('سود خالص', 0) / data.get('فروش', 0)) * 100
-                    ratios['حاشیه سود خالص'] = round(net_margin, 6)
+                if net_profit != 0:
+                    net_margin = safe_divide(net_profit, sales, 100)
+                    if net_margin is not None:
+                        ratios['حاشیه سود خالص'] = net_margin
 
-            # نسبت بدهی
-            if data.get('کل دارایی ها', 0) > 0 and data.get('کل بدهی ها', 0) != 0:
-                debt_ratio = (data.get('کل بدهی ها', 0) / data.get('کل دارایی ها', 0)) * 100
-                ratios['نسبت بدهی'] = round(debt_ratio, 6)
+            # محاسبه نسبت بدهی
+            if total_assets > 0 and total_liab != 0:
+                debt_ratio = safe_divide(total_liab, total_assets, 100)
+                if debt_ratio is not None:
+                    ratios['نسبت بدهی'] = debt_ratio
+
+            # چاپ نسبت‌های محاسبه شده برای اطمینان
+            for ratio_name, ratio_value in ratios.items():
+                print(f"{ratio_name}: {ratio_value:,.6f}")
 
             return ratios
 
         except Exception as e:
             print(f"خطا در محاسبه نسبت‌ها: {str(e)}")
+            print(f"داده‌های ورودی: {data}")
             return {}
 
     def save_results(self, results, output_path):
@@ -368,18 +463,20 @@ class FinancialAnalyzer:
                     worksheet.write(i + 2, 0, ratio, header_format)
 
                 # نوشتن داده‌ها
+                # در تابع save_results، قسمت نوشتن داده‌ها را اینطور تغییر دهید:
+
+                # نوشتن داده‌ها
                 current_col = 1
                 for company in companies:
                     for year_idx, year in enumerate(years):
                         if year in results[company]:
                             ratios_data = results[company][year].get('نسبت‌ها', {})
                             for ratio_idx, ratio in enumerate(ratios):
-                                value = ratios_data.get(ratio, 0)
-                                worksheet.write_number(ratio_idx + 2, current_col + year_idx, value, number_format)
-                        else:
-                            # اگر داده برای این سال وجود ندارد، صفر بنویس
-                            for ratio_idx in range(len(ratios)):
-                                worksheet.write_number(ratio_idx + 2, current_col + year_idx, 0, number_format)
+                                value = ratios_data.get(ratio)
+                                if value is not None and value != 0:
+                                    worksheet.write_number(ratio_idx + 2, current_col + year_idx, value, number_format)
+                                else:
+                                    worksheet.write_blank(ratio_idx + 2, current_col + year_idx, None, number_format)
 
                     current_col += 5
 
