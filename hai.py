@@ -4,6 +4,9 @@ import numpy as np
 import warnings
 from datetime import datetime
 from pathlib import Path
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 
 warnings.filterwarnings('ignore')
 
@@ -375,6 +378,136 @@ class FinancialAnalyzer:
         except Exception as e:
             print(f"خطا در محاسبه نسبت‌ها: {str(e)}")
             return ratios
+        import matplotlib.pyplot as plt
+        import pandas as pd
+        from pathlib import Path
+        import seaborn as sns
+
+    def plot_financial_metrics(self, results):
+        """
+        رسم نمودارهای خطی برای متغیرهای مالی هر شرکت در سال‌های مختلف
+        """
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+
+        # تنظیم استایل نمودار - اصلاح شده
+        plt.style.use('default')  # استفاده از استایل پیش‌فرض
+        sns.set_theme()  # تنظیم تم seaborn
+
+        # تنظیم فونت برای نمایش متن فارسی
+        plt.rcParams['font.family'] = 'Arial'  # یا هر فونت دیگری که از فارسی پشتیبانی می‌کند
+
+        # تعریف رنگ‌های مختلف برای شرکت‌های مختلف
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+
+        # تعریف متغیرهای مالی اصلی برای نمایش
+        main_metrics = [
+            'دارایی جاری',
+            'کل دارایی ها',
+            'بدهی جاری',
+            'کل بدهی ها',
+            'فروش',
+            'سود ناخالص',
+            'سود عملیاتی',
+            'سود خالص'
+        ]
+
+        # ایجاد فولدر برای نمودارها
+        charts_folder = self.output_folder / 'charts'
+        charts_folder.mkdir(exist_ok=True)
+
+        # تبدیل داده‌ها به دیتافریم
+        all_data = []
+        for company in results:
+            for year in results[company]:
+                data = results[company][year].get('متغیرها',
+                                                  {}).copy()  # استفاده از copy برای جلوگیری از تغییر دیکشنری اصلی
+                data['شرکت'] = company
+                data['سال'] = year
+                all_data.append(data)
+
+        df = pd.DataFrame(all_data)
+
+        # رسم نمودار برای هر متغیر مالی
+        for metric in main_metrics:
+            if metric not in df.columns:
+                print(f"متغیر {metric} در داده‌ها یافت نشد.")
+                continue
+
+            plt.figure(figsize=(12, 6))
+
+            for i, company in enumerate(df['شرکت'].unique()):
+                company_data = df[df['شرکت'] == company]
+                plt.plot(company_data['سال'],
+                         company_data[metric],
+                         marker='o',
+                         label=company,
+                         color=colors[i % len(colors)],
+                         linewidth=2)
+
+            plt.title(f'روند {metric} برای شرکت‌های مختلف', fontsize=14, pad=20)
+            plt.xlabel('سال', fontsize=12)
+            plt.ylabel('مقدار (ریال)', fontsize=12)
+            plt.grid(True, linestyle='--', alpha=0.7)
+            plt.legend(title='شرکت‌ها', bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.tight_layout()
+
+            # ذخیره نمودار
+            chart_file = charts_folder / f"{metric.replace(' ', '_')}_trend.png"
+            plt.savefig(chart_file, dpi=300, bbox_inches='tight')
+            plt.close()
+
+        # رسم نمودار نسبت‌های مالی
+        financial_ratios = [
+            'نسبت جاری',
+            'نسبت آنی',
+            'حاشیه سود ناخالص',
+            'حاشیه سود عملیاتی',
+            'حاشیه سود خالص',
+            'نسبت بدهی'
+        ]
+
+        ratio_data = []
+        for company in results:
+            for year in results[company]:
+                ratios = results[company][year].get('نسبت‌ها',
+                                                    {}).copy()  # استفاده از copy برای جلوگیری از تغییر دیکشنری اصلی
+                ratios['شرکت'] = company
+                ratios['سال'] = year
+                ratio_data.append(ratios)
+
+        df_ratios = pd.DataFrame(ratio_data)
+
+        # رسم نمودار برای هر نسبت مالی
+        for ratio in financial_ratios:
+            if ratio not in df_ratios.columns:
+                print(f"نسبت {ratio} در داده‌ها یافت نشد.")
+                continue
+
+            plt.figure(figsize=(12, 6))
+
+            for i, company in enumerate(df_ratios['شرکت'].unique()):
+                company_data = df_ratios[df_ratios['شرکت'] == company]
+                plt.plot(company_data['سال'],
+                         company_data[ratio],
+                         marker='o',
+                         label=company,
+                         color=colors[i % len(colors)],
+                         linewidth=2)
+
+            plt.title(f'روند {ratio} برای شرکت‌های مختلف', fontsize=14, pad=20)
+            plt.xlabel('سال', fontsize=12)
+            plt.ylabel('درصد', fontsize=12)
+            plt.grid(True, linestyle='--', alpha=0.7)
+            plt.legend(title='شرکت‌ها', bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.tight_layout()
+
+            # ذخیره نمودار
+            chart_file = charts_folder / f"{ratio.replace(' ', '_')}_trend.png"
+            plt.savefig(chart_file, dpi=300, bbox_inches='tight')
+            plt.close()
+
+        print("نمودارها با موفقیت رسم و ذخیره شدند.")
 
     def save_to_excel(self, results):
         """ذخیره نتایج در فایل اکسل"""
@@ -521,6 +654,7 @@ class FinancialAnalyzer:
             print(traceback.format_exc())
             return False
 
+
 def main():
     print("\n=== سیستم تحلیل مالی ===")
     print(f"زمان اجرا: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -570,6 +704,14 @@ def main():
                 print(f"\nهیچ داده‌ای برای شرکت {company} یافت نشد!")
 
         if results:
+            print("\nدر حال رسم نمودارها...")
+            try:
+                analyzer.plot_financial_metrics(results)
+                print("نمودارها با موفقیت در پوشه 'charts' ذخیره شدند.")
+            except Exception as chart_error:
+                print(f"خطا در رسم نمودارها: {str(chart_error)}")
+
+            print("\nدر حال ذخیره نتایج در اکسل...")
             analyzer.save_to_excel(results)
         else:
             print("\nهیچ داده‌ای برای ذخیره‌سازی یافت نشد!")
