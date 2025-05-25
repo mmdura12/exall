@@ -104,83 +104,107 @@ class FinancialAnalyzer:
         }
 
     def find_value_in_df(self, df, patterns):
-        """جستجوی هوشمند مقادیر در دیتافریم با دقت بالا"""
+        """جستجوی پیشرفته مقادیر در دیتافریم"""
         try:
-            # حذف سطرها و ستون‌های خالی و پیش‌پردازش داده‌ها
-            df = df.dropna(how='all').dropna(axis=1, how='all')
+            # پیش‌پردازش داده‌ها
             df = df.fillna('')
-            df = df.astype(str).applymap(lambda x: x.strip())
+            df = df.astype(str).applymap(lambda x: str(x).strip())
+            results = []
 
-            found_values = []
-            search_area = [
-                (-1, -2), (-1, -1), (-1, 1), (-1, 2),  # سطر بالا
-                (0, -2), (0, -1), (0, 1), (0, 2),  # سطر فعلی
-                (1, -2), (1, -1), (1, 1), (1, 2),  # سطر پایین
-                (2, -1), (2, 0), (2, 1),  # دو سطر پایین‌تر
-                (-2, -1), (-2, 0), (-2, 1)  # دو سطر بالاتر
-            ]
+            def extract_numbers_from_cell(cell_value):
+                """استخراج تمام اعداد معتبر از یک سلول"""
+                numbers = []
+                parts = str(cell_value).split()
+                for part in parts:
+                    value = self.clean_number(part)
+                    if value > 0:
+                        numbers.append(value)
+                return numbers
 
-            def check_value(row, col):
-                """بررسی معتبر بودن مقدار در یک موقعیت"""
-                try:
-                    if 0 <= row < len(df) and 0 <= col < len(df.columns):
-                        val = self.clean_number(df.iloc[row, col])
-                        if val > 0:
-                            return val
-                except:
-                    pass
-                return None
-
-            # جستجو برای هر الگو
-            for pattern in patterns:
+            def search_pattern_in_cell(cell_value, pattern):
+                """بررسی تطابق الگو با محتوای سلول"""
+                cell_value = str(cell_value).strip()
                 pattern = str(pattern).strip()
 
-                # جستجو در کل دیتافریم
-                for i in range(len(df)):
-                    for j in range(len(df.columns)):
-                        cell = df.iloc[i, j]
+                # حالت‌های مختلف نوشتاری
+                cell_variations = [
+                    cell_value,
+                    cell_value.replace('‌', ' '),  # نیم‌فاصله
+                    cell_value.replace(' ', ''),  # بدون فاصله
+                    cell_value.replace('ي', 'ی'),  # ی عربی
+                    cell_value.replace('ك', 'ک')  # ک عربی
+                ]
 
-                        # اگر الگو در سلول پیدا شد
-                        if pattern in cell:
-                            # بررسی سلول‌های اطراف
-                            for di, dj in search_area:
-                                ni, nj = i + di, j + dj
-                                value = check_value(ni, nj)
-                                if value is not None:
-                                    found_values.append({
-                                        'value': value,
-                                        'pattern': pattern,
-                                        'distance': abs(di) + abs(dj),
-                                        'row': ni + 1,
-                                        'col': nj + 1,
-                                        'original_cell': (i + 1, j + 1)
-                                    })
+                pattern_variations = [
+                    pattern,
+                    pattern.replace('‌', ' '),
+                    pattern.replace(' ', ''),
+                    pattern.replace('ي', 'ی'),
+                    pattern.replace('ك', 'ک')
+                ]
 
-                            # بررسی خود سلول برای عدد
-                            value = check_value(i, j)
-                            if value is not None:
-                                found_values.append({
-                                    'value': value,
+                return any(p in c for p in pattern_variations for c in cell_variations)
+
+            # بررسی هر الگو
+            for pattern in patterns:
+                rows, cols = df.shape
+
+                # جستجو در ماتریس
+                for i in range(rows):
+                    for j in range(cols):
+                        current_cell = df.iloc[i, j]
+
+                        if search_pattern_in_cell(current_cell, pattern):
+                            # بررسی سلول‌های اطراف در محدوده بزرگتر
+                            search_range = [-3, -2, -1, 0, 1, 2, 3]
+                            for di in search_range:
+                                for dj in search_range:
+                                    if di == 0 and dj == 0:
+                                        continue
+
+                                    new_i, new_j = i + di, j + dj
+                                    if 0 <= new_i < rows and 0 <= new_j < cols:
+                                        target_cell = df.iloc[new_i, new_j]
+                                        numbers = extract_numbers_from_cell(target_cell)
+
+                                        for number in numbers:
+                                            results.append({
+                                                'value': number,
+                                                'pattern': pattern,
+                                                'distance': abs(di) + abs(dj),
+                                                'position': (new_i, new_j),
+                                                'original': (i, j)
+                                            })
+
+                            # بررسی خود سلول برای اعداد
+                            numbers = extract_numbers_from_cell(current_cell)
+                            for number in numbers:
+                                results.append({
+                                    'value': number,
                                     'pattern': pattern,
                                     'distance': 0,
-                                    'row': i + 1,
-                                    'col': j + 1,
-                                    'original_cell': (i + 1, j + 1)
+                                    'position': (i, j),
+                                    'original': (i, j)
                                 })
 
-            if found_values:
-                # مرتب‌سازی و انتخاب بهترین مقدار
-                found_values.sort(key=lambda x: (x['distance'], -x['value']))
-                best_match = found_values[0]
-                print(f"مقدار '{best_match['pattern']}': {best_match['value']:,.0f} "
-                      f"در موقعیت ({best_match['row']}, {best_match['col']})")
+            if results:
+                # مرتب‌سازی نتایج بر اساس معیارهای مختلف
+                results.sort(key=lambda x: (
+                    x['distance'],  # اولویت اول: فاصله کمتر
+                    -x['value'],  # اولویت دوم: مقدار بیشتر
+                    x['position'][0]  # اولویت سوم: سطر کمتر
+                ))
+
+                best_match = results[0]
+                print(f"یافتن مقدار برای '{best_match['pattern']}': {best_match['value']:,.0f} "
+                      f"در موقعیت {best_match['position']}")
                 return best_match['value']
 
-            return 0
+            return None  # به جای 0، None برمی‌گردانیم
 
         except Exception as e:
             print(f"خطا در جستجوی مقدار: {str(e)}")
-            return 0
+            return None
 
     def clean_number(self, value):
         """تمیز کردن و تبدیل مقادیر عددی با دقت بالا"""
@@ -188,20 +212,18 @@ class FinancialAnalyzer:
             if pd.isna(value):
                 return 0
 
-            if isinstance(value, (int, float)):
-                return float(value) if value > 0 else 0
-
-            # تبدیل به رشته و حذف کاراکترهای اضافی
+            # تبدیل به رشته
             value = str(value).strip()
 
-            # کاراکترهای خاص که باید جایگزین شوند
+            # حذف کاراکترهای خاص
             replacements = {
                 ',': '', '٬': '', '،': '',
                 '(': '-', ')': '',
                 '−': '-', '–': '-', '—': '-',
                 'ـ': '', '_': '',
-                '\u200c': '', '\u200b': '',  # نویسه‌های نامرئی
-                '%': ''
+                '\u200c': '', '\u200b': '',
+                'ر.ا': '', 'ريال': '', 'ریال': '',
+                '%': '', '٪': ''
             }
 
             for old, new in replacements.items():
@@ -215,24 +237,24 @@ class FinancialAnalyzer:
             for persian, latin in persian_nums.items():
                 value = value.replace(persian, latin)
 
-            # استخراج اعداد
-            value = ''.join(c for c in value if c.isdigit() or c in '.-')
-
-            if value and value not in ['-', '.']:
+            # استخراج عدد
+            num_str = ''.join(c for c in value if c.isdigit() or c in '.-')
+            if num_str and num_str not in ['-', '.']:
                 try:
-                    number = float(value)
-                    # محدوده منطقی برای اعداد مالی
+                    number = float(num_str)
+                    # بررسی محدوده معقول
                     if 0 < abs(number) < 1e12:
                         return number
                 except:
                     pass
+
             return 0
 
         except:
             return 0
 
     def read_financial_data(self, file_path):
-        """خواندن داده‌های مالی از فایل اکسل"""
+        """خواندن داده‌های مالی با تکمیل مقادیر گمشده"""
         try:
             print(f"\nخواندن فایل: {file_path}")
             data = {}
@@ -240,38 +262,69 @@ class FinancialAnalyzer:
             # خواندن تمام شیت‌ها
             xl = pd.ExcelFile(file_path)
 
-            # بررسی هر شیت
             for sheet_name in xl.sheet_names:
                 print(f"\nبررسی شیت {sheet_name}")
 
-                try:
-                    # خواندن شیت با تنظیمات مختلف
-                    df = pd.read_excel(xl, sheet_name=sheet_name, header=None)
+                # خواندن با تنظیمات مختلف
+                df = pd.read_excel(xl, sheet_name=sheet_name, header=None)
 
-                    # جستجوی مقادیر در شیت فعلی
-                    for metric, patterns in self.search_patterns.items():
-                        if metric not in data:  # اگر قبلاً پیدا نشده
-                            value = self.find_value_in_df(df, patterns)
-                            if value > 0:
-                                data[metric] = value
-                                print(f"یافتن {metric}: {value:,.0f}")
+                # جستجوی مقادیر
+                for metric, patterns in self.search_patterns.items():
+                    if metric not in data:
+                        value = self.find_value_in_df(df, patterns)
+                        if value is not None and value > 0:
+                            data[metric] = value
+                            print(f"یافتن {metric}: {value:,.0f}")
 
-                except Exception as sheet_error:
-                    print(f"خطا در خواندن شیت {sheet_name}: {str(sheet_error)}")
-                    continue
-
+            # تکمیل مقادیر گمشده با تخمین‌های منطقی
             if data:
-                print("\nخلاصه مقادیر یافت شده:")
+                estimated_data = self.estimate_missing_values(data)
+                data.update(estimated_data)
+
+                print("\nخلاصه نهایی مقادیر:")
                 for metric, value in data.items():
                     print(f"{metric}: {value:,.0f}")
                 return data
 
-            print("هیچ داده‌ای در فایل یافت نشد!")
             return None
 
         except Exception as e:
             print(f"خطا در خواندن فایل: {str(e)}")
             return None
+
+    def estimate_missing_values(self, data):
+        """تخمین مقادیر گمشده با استفاده از روابط منطقی"""
+        estimated = {}
+
+        # تخمین دارایی‌های جاری
+        if 'دارایی جاری' not in data and 'کل دارایی ها' in data:
+            estimated['دارایی جاری'] = data['کل دارایی ها'] * 0.6
+
+        # تخمین بدهی‌های جاری
+        if 'بدهی جاری' not in data and 'کل بدهی ها' in data:
+            estimated['بدهی جاری'] = data['کل بدهی ها'] * 0.7
+
+        # تخمین موجودی کالا
+        if 'موجودی کالا' not in data and 'دارایی جاری' in data:
+            estimated['موجودی کالا'] = data['دارایی جاری'] * 0.3
+
+        # تخمین سودها
+        if 'فروش' in data:
+            sales = data['فروش']
+            if 'سود ناخالص' not in data:
+                estimated['سود ناخالص'] = sales * 0.3
+            if 'سود عملیاتی' not in data:
+                estimated['سود عملیاتی'] = sales * 0.2
+            if 'سود خالص' not in data:
+                estimated['سود خالص'] = sales * 0.15
+
+        # گزارش تخمین‌ها
+        if estimated:
+            print("\nمقادیر تخمین زده شده:")
+            for metric, value in estimated.items():
+                print(f"{metric} (تخمینی): {value:,.0f}")
+
+        return estimated
 
     def calculate_ratios(self, data):
         """محاسبه نسبت‌های مالی با کنترل دقیق خطا"""
